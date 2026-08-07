@@ -1,0 +1,70 @@
+# EditorConfig is awesome: https://EditorConfig.org
+
+# top-most EditorConfig file
+root = true
+
+# All files
+[*]
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+# C# source files
+[*.cs]
+indent_size = 4
+
+# Place open braces on a new line
+csharp_new_line_before_open_brace = all
+
+# Always prefer braces, even for single-line statements
+csharp_prefer_braces = true:suggestion
+
+# Use var when the type is obvious
+csharp_style_var_for_built_in_types = true:suggestion
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_style_var_elsewhere = false:suggestion
+
+# Do not require 'this.' qualification
+dotnet_style_qualification_for_field = false:suggestion
+dotnet_style_qualification_for_property = false:suggestion
+dotnet_style_qualification_for_method = false:suggestion
+dotnet_style_qualification_for_event = false:suggestion
+
+# Sort 'System' usings first
+dotnet_sort_system_directives_first = true
+
+# Avoid unused imports
+dotnet_diagnostic.IDE0005.severity = suggestion
+
+# Private fields should be camelCase with underscore prefix
+dotnet_naming_rule.private_fields_should_be_camelcase_with_underscore.severity = suggestion
+dotnet_naming_rule.private_fields_should_be_camelcase_with_underscore.symbols = private_fields
+dotnet_naming_rule.private_fields_should_be_camelcase_with_underscore.style = underscore_prefix
+
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+
+dotnet_naming_style.underscore_prefix.capitalization = camel_case
+dotnet_naming_style.underscore_prefix.required_prefix = _
+
+# Avalonia AXAML files
+[*.axaml]
+indent_style = space
+indent_size = 4
+
+# XML files
+[*.xml]
+indent_style = space
+indent_size = 2
+
+# JSON files
+[*.json]
+indent_style = space
+indent_size = 2
+
+# Markdown files
+[*.md]
+trim_trailing_whitespace = false

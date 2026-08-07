@@ -1,0 +1,12 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Avalonia: SCADA",
+            "type": "dotnet",
+            "request": "launch",
+            "projectPath": "${workspaceFolder}/SCADA/SCADA.csproj",
+            "preLaunchTask": "build"
+        }
+    ]
+}

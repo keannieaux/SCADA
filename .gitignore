@@ -3,6 +3,7 @@
 [Oo]bj/
 [Ll]og/
 [Ll]ogs/
+publish/
 
 # Visual Studio / Rider
 .vs/
@@ -23,6 +24,25 @@ artifacts/
 _ReSharper*/
 *.[Rr]e[Ss]harper
 *.DotSettings.user
+
+# VS Code — shared config only
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# Test & coverage
+TestResults/
+coverage/
+
+# Local databases
+*.db
+
+# Secrets & certificates
+*.pfx
+*.key
+secrets.json
 
 # OS
 .DS_Store

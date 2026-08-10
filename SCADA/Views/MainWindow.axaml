@@ -1,22 +1,59 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:SCADA.ViewModels"
+        xmlns:ic="using:FluentIcons.Avalonia"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="600"
         x:Class="SCADA.Views.MainWindow"
         x:DataType="vm:MainViewModel"
         Icon="/Assets/avalonia-logo.ico"
-        Title="SCADA">
+        Title="SCADA"
+        Background="{DynamicResource Bg0Brush}">
 
     <Design.DataContext>
         <!-- This only sets the DataContext for the previewer in an IDE,
              to set the actual DataContext for runtime, set the DataContext property in code (look at App.axaml.cs) -->
         <vm:MainViewModel />
     </Design.DataContext>
+    <Panel>
 
-    <TextBox Text="{Binding Greeting}"
-             HorizontalAlignment="Center"
-             VerticalAlignment="Center" />
+    <ContentControl Content="{Binding LoginViewModel}"
+                    IsVisible="{Binding !IsLoggedIn}" />
+
+    <Grid ColumnDefinitions="200,*" IsVisible="{Binding IsLoggedIn}">
+
+        <ListBox Grid.Column="0"
+                Background="{DynamicResource Bg1Brush}"
+                ItemsSource="{Binding NavItems}"
+                SelectedItem="{Binding SelectedNavItem}"
+                Padding="8">
+            <ListBox.Styles>
+                <Style Selector="ListBoxItem">
+                    <Setter Property="CornerRadius" Value="4"/>
+                    <Setter Property="Margin" Value="0,2"/>
+                </Style>
+                <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+                    <Setter Property="Background" Value="{DynamicResource Bg3Brush}"/>
+                </Style>
+            </ListBox.Styles>
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <ic:FluentIcon Icon="{Binding Icon}"
+                            IconVariant="Filled"
+                            FontSize="16"
+                            Foreground="{DynamicResource Text2Brush}" />
+                        <TextBlock Classes="body" Text="{Binding Title}" VerticalAlignment="Center" />
+                    </StackPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+        <TextBlock Grid.Column="1" Classes="h1" Text="{Binding SelectedNavItem.Title}" Margin="24" />
+
+    </Grid>
+
+    </Panel>
 
 </Window>

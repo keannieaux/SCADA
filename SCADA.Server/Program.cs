@@ -1,7 +1,14 @@
-using SCADA.Server;
+using SCADA.Server.Services;
 
-var builder = Host.CreateApplicationBuilder(args);
-builder.Services.AddHostedService<Worker>();
+var builder = WebApplication.CreateBuilder(args);
 
-var host = builder.Build();
-host.Run();
+// Add services to the container.
+builder.Services.AddGrpc();
+
+var app = builder.Build();
+
+// Configure the HTTP request pipeline.
+app.MapGrpcService<GreeterService>();
+app.MapGet("/", () => "Communication with gRPC endpoints must be made through a gRPC client. To learn how to create a client, visit: https://go.microsoft.com/fwlink/?linkid=2086909");
+
+app.Run();

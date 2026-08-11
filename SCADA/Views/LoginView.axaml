@@ -1,0 +1,39 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+xmlns:vm="using:SCADA.ViewModels"
+x:Class="SCADA.Views.LoginView"
+x:DataType="vm:LoginViewModel">
+
+    <Grid Background="{DynamicResource Bg0Brush}">
+        <Border Background="{DynamicResource Bg1Brush}"
+                CornerRadius="6"
+                Width="300"
+                Padding="24"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center">
+            <StackPanel Spacing="14">
+                <TextBlock Classes="h1" Text="SCADA" HorizontalAlignment="Center" />
+                <TextBlock Classes="body" Text="Вход в систему"
+                           HorizontalAlignment="Center"
+                           Foreground="{DynamicResource Text2Brush}" />
+
+                <StackPanel Spacing="4">
+                    <TextBlock Classes="body" Text="Пользователь" />
+                    <TextBox Text="{Binding Username}" />
+                </StackPanel>
+
+                <StackPanel Spacing="4">
+                    <TextBlock Classes="body" Text="Пароль" />
+                    <TextBox Text="{Binding Password}" PasswordChar="•"/>
+                </StackPanel>
+
+                <Button Content="Войти"
+                        Command="{Binding LoginCommand}"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Center" />
+            </StackPanel>
+        </Border>
+    </Grid>
+
+
+</UserControl>

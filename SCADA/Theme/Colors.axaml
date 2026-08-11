@@ -1,0 +1,28 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+<Color x:Key="Bg0Color">#1B1D20</Color>
+<Color x:Key="Bg1Color">#222528</Color>
+<Color x:Key="Bg2Color">#2B3F33</Color>
+<Color x:Key="Bg3Color">#33383D</Color>
+<Color x:Key="BorderColor">#3A3F44</Color>
+<Color x:Key="TextColor">#E7E9EA</Color>
+<Color x:Key="Text2Color">#9BA1A5</Color>
+<Color x:Key="AccentColor">#5FC2CE</Color>
+<Color x:Key="CritColor">#E5484D</Color>
+<Color x:Key="WarnColor">#E8A33D</Color>
+<Color x:Key="GoodColor">#3DD68C</Color>
+
+<SolidColorBrush x:Key="Bg0Brush" Color="{DynamicResource Bg0Color}" />
+<SolidColorBrush x:Key="Bg1Brush" Color="{DynamicResource Bg1Color}" />
+<SolidColorBrush x:Key="Bg2Brush" Color="{DynamicResource Bg2Color}" />
+<SolidColorBrush x:Key="Bg3Brush" Color="{DynamicResource Bg3Color}" />
+<SolidColorBrush x:Key="BorderBrush" Color="{DynamicResource BorderColor}" />
+<SolidColorBrush x:Key="TextBrush" Color="{DynamicResource TextColor}" />
+<SolidColorBrush x:Key="Text2Brush" Color="{DynamicResource Text2Color}" />
+<SolidColorBrush x:Key="AccentBrush" Color="{DynamicResource AccentColor}" />
+<SolidColorBrush x:Key="CritBrush" Color="{DynamicResource CritColor}" />
+<SolidColorBrush x:Key="WarnBrush" Color="{DynamicResource WarnColor}" />
+<SolidColorBrush x:Key="GoodBrush" Color="{DynamicResource GoodColor}" />
+
+</ResourceDictionary>

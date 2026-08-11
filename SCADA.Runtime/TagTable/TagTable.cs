@@ -5,6 +5,9 @@ namespace SCADA.Runtime.TagTable;
 public sealed class TagTable : ITagTable
 {
     private readonly TagSlot[] _slots;
+    private long _epoch;
+
+    public long CurrentEpoch => Interlocked.Read(ref _epoch);
     public TagTable(int capacity)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(capacity);
@@ -33,8 +36,27 @@ public sealed class TagTable : ITagTable
     public void Write(TagId id, TagValue value)
     {
         ref TagSlot slot = ref _slots[id.Value];
+
         Interlocked.Increment(ref slot.Version);
         slot.Value = value;
+        slot.LastChangedEpoch = Interlocked.Increment(ref _epoch);
         Interlocked.Increment(ref slot.Version);
+    }
+
+    public int GetChangedSince(long epoch, Span<TagId> destination)
+    {
+        int count = 0;
+        for(int i = 0; i< _slots.Length; i++)
+        {
+            if(Volatile.Read(ref _slots[i].LastChangedEpoch)> epoch)
+            {
+                if(count < destination.Length)
+                {
+                    destination[count] = new TagId(i);
+                }
+                count++;
+            }
+        }
+        return count;
     }
 }

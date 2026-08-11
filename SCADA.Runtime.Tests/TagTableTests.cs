@@ -73,4 +73,37 @@ public class TagTableTests
         await Task.WhenAll(writers.Concat(readers));
         Assert.Equal(0, tornReads);
     }
+
+    [Fact]
+    public void GetChangedSince_ReturnsExactlyWrittenTags()
+    {
+        var table = new TagTable.TagTable(256);
+        long before = table.CurrentEpoch;
+
+        table.Write(new TagId(5), new TagValue(1, 1, Quality.Good));
+        table.Write(new TagId(100), new TagValue(2, 2, Quality.Good));
+        table.Write(new TagId(250), new TagValue(3, 3, Quality.Good));
+
+        Span<TagId> buffer = stackalloc TagId[256];
+        int count = table.GetChangedSince(before, buffer);
+
+        Assert.Equal(3, count);
+        var ids = buffer[..count].ToArray().Select(t => t.Value).ToArray();
+        Assert.Equal(new[] { 5, 100, 250 }, ids); // порядок = порядок индексов
+    }
+
+    [Fact]
+    public void GetChangedSince_AfterCheckpoint_ReturnsNothing()
+    {
+        var table = new TagTable.TagTable(256);
+        table.Write(new TagId(5), new TagValue(1, 1, Quality.Good));
+
+        long checkpoint = table.CurrentEpoch; // UI «увидел» всё
+
+        Span<TagId> buffer = stackalloc TagId[256];
+        Assert.Equal(0, table.GetChangedSince(checkpoint, buffer));
+
+        table.Write(new TagId(5), new TagValue(2, 2, Quality.Good)); // новая запись
+        Assert.Equal(1, table.GetChangedSince(checkpoint, buffer));
+    }
 }

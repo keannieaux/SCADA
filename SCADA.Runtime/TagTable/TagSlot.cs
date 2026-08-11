@@ -6,4 +6,6 @@ internal struct TagSlot
 {
     public int Version;
     public TagValue Value;
+
+    public long LastChangedEpoch;
 }

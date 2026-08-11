@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='utf-8' />
+<title>SCADA.Benchmarks.TagTableBenchmarks-20260811-165457</title>
+
+<style type="text/css">
+	table { border-collapse: collapse; display: block; width: 100%; overflow: auto; }
+	td, th { padding: 6px 13px; border: 1px solid #ddd; text-align: right; }
+	tr { background-color: #fff; border-top: 1px solid #ccc; }
+	tr:nth-child(even) { background: #f8f8f8; }
+</style>
+</head>
+<body>
+<pre><code>
+BenchmarkDotNet v0.15.8, Windows 11 (10.0.26200.8655/25H2/2025Update/HudsonValley2)
+AMD Ryzen 5 5600G with Radeon Graphics 3.90GHz, 1 CPU, 12 logical and 6 physical cores
+.NET SDK 10.0.302
+  [Host]     : .NET 10.0.10 (10.0.10, 10.0.1026.32716), X64 RyuJIT x86-64-v3
+  DefaultJob : .NET 10.0.10 (10.0.10, 10.0.1026.32716), X64 RyuJIT x86-64-v3
+</code></pre>
+<pre><code></code></pre>
+
+<table>
+<thead><tr><th>Method</th><th>Capacity</th><th>Mean    </th><th>Error</th><th>StdDev</th><th>Ratio</th><th>RatioSD</th><th>Allocated</th><th>Alloc Ratio</th>
+</tr>
+</thead><tbody><tr><td>Write</td><td>10000</td><td>4.2672 ns</td><td>0.0457 ns</td><td>0.0428 ns</td><td>1.00</td><td>0.01</td><td>-</td><td>NA</td>
+</tr><tr><td>Read</td><td>10000</td><td>0.7510 ns</td><td>0.0129 ns</td><td>0.0114 ns</td><td>0.18</td><td>0.00</td><td>-</td><td>NA</td>
+</tr><tr><td>ScanChanged</td><td>10000</td><td>5,718.0365 ns</td><td>110.8500 ns</td><td>136.1337 ns</td><td>1,340.13</td><td>33.82</td><td>-</td><td>NA</td>
+</tr><tr><td>Write</td><td>20000</td><td>4.2750 ns</td><td>0.0212 ns</td><td>0.0188 ns</td><td>1.00</td><td>0.01</td><td>-</td><td>NA</td>
+</tr><tr><td>Read</td><td>20000</td><td>0.8094 ns</td><td>0.0155 ns</td><td>0.0121 ns</td><td>0.19</td><td>0.00</td><td>-</td><td>NA</td>
+</tr><tr><td>ScanChanged</td><td>20000</td><td>11,686.5687 ns</td><td>137.0898 ns</td><td>128.2339 ns</td><td>2,733.75</td><td>31.27</td><td>-</td><td>NA</td>
+</tr></tbody></table>
+</body>
+</html>

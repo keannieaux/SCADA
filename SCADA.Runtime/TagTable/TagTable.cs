@@ -4,28 +4,37 @@ namespace SCADA.Runtime.TagTable;
 
 public sealed class TagTable : ITagTable
 {
-    private readonly TagValue[] _values;
-    private readonly object _sync = new();
-
+    private readonly TagSlot[] _slots;
     public TagTable(int capacity)
     {
-        _values = new TagValue[capacity];
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(capacity);
+        _slots = new TagSlot[capacity];
     }
 
 
     public TagValue Read(TagId id)
     {
-        lock (_sync)
+        ref TagSlot slot = ref _slots[id.Value];
+        while (true)
         {
-            return _values[id.Value];
+            int before = Volatile.Read(ref slot.Version);
+            if((before & 1) != 0)
+            {
+                continue;
+            }
+            TagValue value = slot.Value;
+
+            int after = Volatile.Read(ref slot.Version);
+            if(after == before)
+                return value;
         }
     }
 
     public void Write(TagId id, TagValue value)
     {
-        lock (_sync)
-        {
-            _values[id.Value] = value;
-        }
+        ref TagSlot slot = ref _slots[id.Value];
+        Interlocked.Increment(ref slot.Version);
+        slot.Value = value;
+        Interlocked.Increment(ref slot.Version);
     }
 }

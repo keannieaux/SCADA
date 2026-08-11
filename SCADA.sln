@@ -8,6 +8,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SCADA.Server", "SCADA.Serve
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SCADA.Runtime", "SCADA.Runtime\SCADA.Runtime.csproj", "{F66DAAC4-302F-496C-BF51-F1A401F8D33F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SCADA.Runtime.Tests", "SCADA.Runtime.Tests\SCADA.Runtime.Tests.csproj", "{802437F0-2631-477F-AD76-DE7BDDD90607}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -66,6 +68,18 @@ Global
 		{F66DAAC4-302F-496C-BF51-F1A401F8D33F}.Release|x64.Build.0 = Release|Any CPU
 		{F66DAAC4-302F-496C-BF51-F1A401F8D33F}.Release|x86.ActiveCfg = Release|Any CPU
 		{F66DAAC4-302F-496C-BF51-F1A401F8D33F}.Release|x86.Build.0 = Release|Any CPU
+		{802437F0-2631-477F-AD76-DE7BDDD90607}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{802437F0-2631-477F-AD76-DE7BDDD90607}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{802437F0-2631-477F-AD76-DE7BDDD90607}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{802437F0-2631-477F-AD76-DE7BDDD90607}.Debug|x64.Build.0 = Debug|Any CPU
+		{802437F0-2631-477F-AD76-DE7BDDD90607}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{802437F0-2631-477F-AD76-DE7BDDD90607}.Debug|x86.Build.0 = Debug|Any CPU
+		{802437F0-2631-477F-AD76-DE7BDDD90607}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{802437F0-2631-477F-AD76-DE7BDDD90607}.Release|Any CPU.Build.0 = Release|Any CPU
+		{802437F0-2631-477F-AD76-DE7BDDD90607}.Release|x64.ActiveCfg = Release|Any CPU
+		{802437F0-2631-477F-AD76-DE7BDDD90607}.Release|x64.Build.0 = Release|Any CPU
+		{802437F0-2631-477F-AD76-DE7BDDD90607}.Release|x86.ActiveCfg = Release|Any CPU
+		{802437F0-2631-477F-AD76-DE7BDDD90607}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

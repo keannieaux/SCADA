@@ -1,17 +1,25 @@
 <UserControl xmlns="https://github.com/avaloniaui"
 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 xmlns:vm="using:SCADA.ViewModels"
+xmlns:ic="using:FluentIcons.Avalonia"
 x:Class="SCADA.Views.LoginView"
 x:DataType="vm:LoginViewModel">
 
     <Grid Background="{DynamicResource Bg0Brush}">
         <Border Background="{DynamicResource Bg1Brush}"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="1"
                 CornerRadius="6"
                 Width="300"
                 Padding="24"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center">
             <StackPanel Spacing="14">
+
+                <ic:FluentIcon Icon="Grid" IconVariant="Filled" FontSize="32"
+                               HorizontalAlignment="Center"
+                               Foreground="{DynamicResource AccentBrush}" />
+
                 <TextBlock Classes="h1" Text="SCADA" HorizontalAlignment="Center" />
                 <TextBlock Classes="body" Text="Вход в систему"
                            HorizontalAlignment="Center"
@@ -19,18 +27,39 @@ x:DataType="vm:LoginViewModel">
 
                 <StackPanel Spacing="4">
                     <TextBlock Classes="body" Text="Пользователь" />
-                    <TextBox Text="{Binding Username}" />
+                    <TextBox Text="{Binding Username}"
+                             Background="{DynamicResource Bg2Brush}"
+                             BorderBrush="{DynamicResource BorderBrush}"
+                             Foreground="{DynamicResource TextBrush}"
+                             CornerRadius="3" />
                 </StackPanel>
 
                 <StackPanel Spacing="4">
                     <TextBlock Classes="body" Text="Пароль" />
-                    <TextBox Text="{Binding Password}" PasswordChar="•"/>
+                    <TextBox Text="{Binding Password}" PasswordChar="•"
+                             Background="{DynamicResource Bg2Brush}"
+                             BorderBrush="{DynamicResource BorderBrush}"
+                             Foreground="{DynamicResource TextBrush}"
+                             CornerRadius="3" />
                 </StackPanel>
 
                 <Button Content="Войти"
                         Command="{Binding LoginCommand}"
                         HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Center" />
+                        HorizontalContentAlignment="Center"
+                        Background="{DynamicResource AccentBrush}"
+                        Foreground="{DynamicResource AccentInkBrush}"
+                        FontWeight="Bold"
+                        CornerRadius="4" />
+
+                <StackPanel Orientation="Horizontal" Spacing="6"
+                            HorizontalAlignment="Center" Margin="0,6,0,0">
+                    <ic:FluentIcon Icon="PlugConnected" IconVariant="Filled" FontSize="12"
+                                   Foreground="{DynamicResource Text2Brush}" />
+                    <TextBlock Classes="body" FontSize="12"
+                               Foreground="{DynamicResource Text2Brush}"
+                               Text="подключение: каки писи" />
+                </StackPanel>
             </StackPanel>
         </Border>
     </Grid>

@@ -3,7 +3,7 @@
 
 <Color x:Key="Bg0Color">#1B1D20</Color>
 <Color x:Key="Bg1Color">#222528</Color>
-<Color x:Key="Bg2Color">#2B3F33</Color>
+<Color x:Key="Bg2Color">#2B2F33</Color>
 <Color x:Key="Bg3Color">#33383D</Color>
 <Color x:Key="BorderColor">#3A3F44</Color>
 <Color x:Key="TextColor">#E7E9EA</Color>
@@ -12,6 +12,7 @@
 <Color x:Key="CritColor">#E5484D</Color>
 <Color x:Key="WarnColor">#E8A33D</Color>
 <Color x:Key="GoodColor">#3DD68C</Color>
+<Color x:Key="AccentInkColor">#0C2226</Color>
 
 <SolidColorBrush x:Key="Bg0Brush" Color="{DynamicResource Bg0Color}" />
 <SolidColorBrush x:Key="Bg1Brush" Color="{DynamicResource Bg1Color}" />
@@ -24,5 +25,16 @@
 <SolidColorBrush x:Key="CritBrush" Color="{DynamicResource CritColor}" />
 <SolidColorBrush x:Key="WarnBrush" Color="{DynamicResource WarnColor}" />
 <SolidColorBrush x:Key="GoodBrush" Color="{DynamicResource GoodColor}" />
+<SolidColorBrush x:Key="AccentInkBrush" Color="{DynamicResource AccentInkColor}" />
+<SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="{DynamicResource AccentColor}" />
+<SolidColorBrush x:Key="ToggleSwitchFillOn" Color="{DynamicResource AccentColor}" />
+<SolidColorBrush x:Key="ToggleSwitchFillOnPointerOver" Color="{DynamicResource AccentColor}" />
+<SolidColorBrush x:Key="ToggleSwitchStrokeOn" Color="{DynamicResource AccentColor}" />
+<SolidColorBrush x:Key="ToggleSwitchStrokeOnPointerOver" Color="{DynamicResource AccentColor}" />
+<SolidColorBrush x:Key="ToggleSwitchKnobFillOn" Color="{DynamicResource AccentInkColor}" />
+<SolidColorBrush x:Key="ToggleSwitchKnobFillOnPointerOver" Color="{DynamicResource AccentInkColor}" />
+<SolidColorBrush x:Key="ToggleSwitchFillOnPressed" Color="{DynamicResource AccentColor}" />
+<SolidColorBrush x:Key="ToggleSwitchStrokeOnPressed" Color="{DynamicResource AccentColor}" />
+<SolidColorBrush x:Key="ToggleSwitchKnobFillOnPressed" Color="{DynamicResource AccentInkColor}" />
 
 </ResourceDictionary>

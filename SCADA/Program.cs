@@ -17,6 +17,8 @@ sealed class Program
     public static void Main(string[] args)
     {
         var builder = Host.CreateApplicationBuilder(args);
+        builder.Services.AddSingleton<LoginViewModel>();
+        builder.Services.AddSingleton<SettingsViewModel>();
         builder.Services.AddSingleton<MainViewModel>();
         builder.Services.AddSingleton<MainWindow>();
 

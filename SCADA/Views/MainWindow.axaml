@@ -50,7 +50,10 @@
             </ListBox.ItemTemplate>
         </ListBox>
 
-        <TextBlock Grid.Column="1" Classes="h1" Text="{Binding SelectedNavItem.Title}" Margin="24" />
+       <Grid Grid.Column="1" RowDefinitions="Auto,*">
+            <TextBlock Grid.Row="0" Classes="h1" Text="{Binding SelectedNavItem.Title}" Margin="24,24,24,12"/>
+            <ContentControl Grid.Row="1" Content="{Binding CurrentPage}" Margin="24,0,24,24" />
+        </Grid>
 
     </Grid>
 

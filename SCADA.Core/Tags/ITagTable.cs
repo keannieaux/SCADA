@@ -1,5 +1,4 @@
-﻿using SCADA.Core.Tags;
-namespace SCADA.Runtime.TagTable;
+namespace SCADA.Core.Tags;
 
 public interface ITagTable
 {

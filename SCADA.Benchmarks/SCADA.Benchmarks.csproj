@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\SCADA.Runtime\SCADA.Runtime.csproj" />
+    <ProjectReference Include="..\SCADA.Expressions\SCADA.Expressions.csproj" />
   </ItemGroup>
 
   <ItemGroup>

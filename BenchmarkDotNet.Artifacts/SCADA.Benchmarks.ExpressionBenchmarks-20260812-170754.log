@@ -1,0 +1,156 @@
+// Validating benchmarks:
+// ***** BenchmarkRunner: Start   *****
+// ***** Found 1 benchmark(s) in total *****
+// ***** Building 1 exe(s) in Parallel: Start   *****
+// start dotnet  restore --nodeReuse:false /p:UseSharedCompilation=false /p:Deterministic=true /p:Optimize=true /p:ArtifactsPath="E:\CSharp\scada\SCADA.Benchmarks\bin\Release\net10.0\SCADA.Benchmarks-ShortRun-1/" /p:OutDir="E:\CSharp\scada\SCADA.Benchmarks\bin\Release\net10.0\SCADA.Benchmarks-ShortRun-1\bin\Release\net10.0/" /p:OutputPath="E:\CSharp\scada\SCADA.Benchmarks\bin\Release\net10.0\SCADA.Benchmarks-ShortRun-1\bin\Release\net10.0/" /p:PublishDir="E:\CSharp\scada\SCADA.Benchmarks\bin\Release\net10.0\SCADA.Benchmarks-ShortRun-1\publish/" in E:\CSharp\scada\SCADA.Benchmarks\bin\Release\net10.0\SCADA.Benchmarks-ShortRun-1
+// command took 2.34 sec and exited with 0
+// start dotnet  build -c Release --no-restore --nodeReuse:false /p:UseSharedCompilation=false /p:Deterministic=true /p:Optimize=true /p:ArtifactsPath="E:\CSharp\scada\SCADA.Benchmarks\bin\Release\net10.0\SCADA.Benchmarks-ShortRun-1/" /p:OutDir="E:\CSharp\scada\SCADA.Benchmarks\bin\Release\net10.0\SCADA.Benchmarks-ShortRun-1\bin\Release\net10.0/" /p:OutputPath="E:\CSharp\scada\SCADA.Benchmarks\bin\Release\net10.0\SCADA.Benchmarks-ShortRun-1\bin\Release\net10.0/" /p:PublishDir="E:\CSharp\scada\SCADA.Benchmarks\bin\Release\net10.0\SCADA.Benchmarks-ShortRun-1\publish/" --output "E:\CSharp\scada\SCADA.Benchmarks\bin\Release\net10.0\SCADA.Benchmarks-ShortRun-1\bin\Release\net10.0/" in E:\CSharp\scada\SCADA.Benchmarks\bin\Release\net10.0\SCADA.Benchmarks-ShortRun-1
+// command took 16.61 sec and exited with 0
+// ***** Done, took 00:00:19 (19.29 sec)   *****
+// Found 1 benchmarks:
+//   ExpressionBenchmarks.Evaluate: ShortRun(IterationCount=3, LaunchCount=1, WarmupCount=3)
+
+Setup power plan (GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c FriendlyName: Высокая производительность)
+// **************************
+// Benchmark: ExpressionBenchmarks.Evaluate: ShortRun(IterationCount=3, LaunchCount=1, WarmupCount=3)
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet SCADA.Benchmarks-ShortRun-1.dll --anonymousPipes 2088 2084 --benchmarkName SCADA.Benchmarks.ExpressionBenchmarks.Evaluate --job ShortRun --benchmarkId 0 in E:\CSharp\scada\SCADA.Benchmarks\bin\Release\net10.0\SCADA.Benchmarks-ShortRun-1\bin\Release\net10.0
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.15.8
+// Runtime=.NET 10.0.10 (10.0.10, 10.0.1026.32716), X64 RyuJIT x86-64-v3
+// GC=Concurrent Workstation
+// HardwareIntrinsics=AVX2+BMI1+BMI2+F16C+FMA+LZCNT+MOVBE,AVX,SSE3+SSSE3+SSE4.1+SSE4.2+POPCNT,X86Base+SSE+SSE2,AES+PCLMUL VectorSize=256
+// Job: ShortRun(IterationCount=3, LaunchCount=1, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 246600.00 ns, 246.6000 us/op
+WorkloadJitting  1: 1 op, 3710900.00 ns, 3.7109 ms/op
+
+OverheadJitting  2: 16 op, 319500.00 ns, 19.9688 us/op
+WorkloadJitting  2: 16 op, 313100.00 ns, 19.5688 us/op
+
+WorkloadPilot    1: 16 op, 2100.00 ns, 131.2500 ns/op
+WorkloadPilot    2: 32 op, 2800.00 ns, 87.5000 ns/op
+WorkloadPilot    3: 64 op, 4200.00 ns, 65.6250 ns/op
+WorkloadPilot    4: 128 op, 7200.00 ns, 56.2500 ns/op
+WorkloadPilot    5: 256 op, 14200.00 ns, 55.4688 ns/op
+WorkloadPilot    6: 512 op, 33300.00 ns, 65.0391 ns/op
+WorkloadPilot    7: 1024 op, 80100.00 ns, 78.2227 ns/op
+WorkloadPilot    8: 2048 op, 103800.00 ns, 50.6836 ns/op
+WorkloadPilot    9: 4096 op, 237700.00 ns, 58.0322 ns/op
+WorkloadPilot   10: 8192 op, 455100.00 ns, 55.5542 ns/op
+WorkloadPilot   11: 16384 op, 951700.00 ns, 58.0872 ns/op
+WorkloadPilot   12: 32768 op, 1870400.00 ns, 57.0801 ns/op
+WorkloadPilot   13: 65536 op, 3725700.00 ns, 56.8497 ns/op
+WorkloadPilot   14: 131072 op, 7482600.00 ns, 57.0877 ns/op
+WorkloadPilot   15: 262144 op, 15187700.00 ns, 57.9365 ns/op
+WorkloadPilot   16: 524288 op, 29943500.00 ns, 57.1127 ns/op
+WorkloadPilot   17: 1048576 op, 58996600.00 ns, 56.2635 ns/op
+WorkloadPilot   18: 2097152 op, 54015500.00 ns, 25.7566 ns/op
+WorkloadPilot   19: 4194304 op, 91453700.00 ns, 21.8043 ns/op
+WorkloadPilot   20: 8388608 op, 176961800.00 ns, 21.0955 ns/op
+WorkloadPilot   21: 16777216 op, 352818500.00 ns, 21.0296 ns/op
+WorkloadPilot   22: 33554432 op, 682737400.00 ns, 20.3472 ns/op
+
+OverheadWarmup   1: 33554432 op, 56770800.00 ns, 1.6919 ns/op
+OverheadWarmup   2: 33554432 op, 60472800.00 ns, 1.8022 ns/op
+OverheadWarmup   3: 33554432 op, 56900000.00 ns, 1.6958 ns/op
+OverheadWarmup   4: 33554432 op, 60589600.00 ns, 1.8057 ns/op
+OverheadWarmup   5: 33554432 op, 41163500.00 ns, 1.2268 ns/op
+
+OverheadActual   1: 33554432 op, 41157900.00 ns, 1.2266 ns/op
+OverheadActual   2: 33554432 op, 41266900.00 ns, 1.2298 ns/op
+OverheadActual   3: 33554432 op, 41022100.00 ns, 1.2226 ns/op
+OverheadActual   4: 33554432 op, 41108500.00 ns, 1.2251 ns/op
+OverheadActual   5: 33554432 op, 45671600.00 ns, 1.3611 ns/op
+OverheadActual   6: 33554432 op, 44429400.00 ns, 1.3241 ns/op
+OverheadActual   7: 33554432 op, 43844400.00 ns, 1.3067 ns/op
+OverheadActual   8: 33554432 op, 41019100.00 ns, 1.2225 ns/op
+OverheadActual   9: 33554432 op, 42009100.00 ns, 1.2520 ns/op
+OverheadActual  10: 33554432 op, 42213100.00 ns, 1.2580 ns/op
+OverheadActual  11: 33554432 op, 41059100.00 ns, 1.2237 ns/op
+OverheadActual  12: 33554432 op, 41537100.00 ns, 1.2379 ns/op
+OverheadActual  13: 33554432 op, 41631700.00 ns, 1.2407 ns/op
+OverheadActual  14: 33554432 op, 41109300.00 ns, 1.2252 ns/op
+OverheadActual  15: 33554432 op, 41851000.00 ns, 1.2473 ns/op
+
+WorkloadWarmup   1: 33554432 op, 692782400.00 ns, 20.6465 ns/op
+WorkloadWarmup   2: 33554432 op, 691604800.00 ns, 20.6114 ns/op
+WorkloadWarmup   3: 33554432 op, 699028800.00 ns, 20.8327 ns/op
+
+// BeforeActualRun
+WorkloadActual   1: 33554432 op, 698849100.00 ns, 20.8273 ns/op
+WorkloadActual   2: 33554432 op, 710936800.00 ns, 21.1876 ns/op
+WorkloadActual   3: 33554432 op, 694990300.00 ns, 20.7123 ns/op
+
+// AfterActualRun
+WorkloadResult   1: 33554432 op, 657312000.00 ns, 19.5894 ns/op
+WorkloadResult   2: 33554432 op, 669399700.00 ns, 19.9497 ns/op
+WorkloadResult   3: 33554432 op, 653453200.00 ns, 19.4744 ns/op
+// GC:  0 0 0 0 33554432
+// Threading:  0 0 33554432
+
+// AfterAll
+// Benchmark Process 34128 has exited with code 0.
+
+Mean = 19.671 ns, StdErr = 0.143 ns (0.73%), N = 3, StdDev = 0.248 ns
+Min = 19.474 ns, Q1 = 19.532 ns, Median = 19.589 ns, Q3 = 19.770 ns, Max = 19.950 ns
+IQR = 0.238 ns, LowerFence = 19.175 ns, UpperFence = 20.126 ns
+ConfidenceInterval = [15.148 ns; 24.195 ns] (CI 99.9%), Margin = 4.523 ns (23.00% of Mean)
+Skewness = 0.29, Kurtosis = 0.67, MValue = 2
+
+// ** Remained 0 (0.0 %) benchmark(s) to run. Estimated finish 2026-08-12 17:08 (0h 0m from now) **
+Successfully reverted power plan (GUID: 381b4222-f694-41f0-9685-ff5bb260df2e FriendlyName: Сбалансированная)
+// ***** BenchmarkRunner: Finish  *****
+
+// * Export *
+  BenchmarkDotNet.Artifacts\results\SCADA.Benchmarks.ExpressionBenchmarks-report.csv
+  BenchmarkDotNet.Artifacts\results\SCADA.Benchmarks.ExpressionBenchmarks-report-github.md
+  BenchmarkDotNet.Artifacts\results\SCADA.Benchmarks.ExpressionBenchmarks-report.html
+
+// * Detailed results *
+ExpressionBenchmarks.Evaluate: ShortRun(IterationCount=3, LaunchCount=1, WarmupCount=3)
+Runtime = .NET 10.0.10 (10.0.10, 10.0.1026.32716), X64 RyuJIT x86-64-v3; GC = Concurrent Workstation
+Mean = 19.671 ns, StdErr = 0.143 ns (0.73%), N = 3, StdDev = 0.248 ns
+Min = 19.474 ns, Q1 = 19.532 ns, Median = 19.589 ns, Q3 = 19.770 ns, Max = 19.950 ns
+IQR = 0.238 ns, LowerFence = 19.175 ns, UpperFence = 20.126 ns
+ConfidenceInterval = [15.148 ns; 24.195 ns] (CI 99.9%), Margin = 4.523 ns (23.00% of Mean)
+Skewness = 0.29, Kurtosis = 0.67, MValue = 2
+-------------------- Histogram --------------------
+[19.306 ns ; 19.758 ns) | @@
+[19.758 ns ; 20.175 ns) | @
+---------------------------------------------------
+
+// * Summary *
+
+BenchmarkDotNet v0.15.8, Windows 11 (10.0.26200.8655/25H2/2025Update/HudsonValley2)
+AMD Ryzen 5 5600G with Radeon Graphics 3.90GHz, 1 CPU, 12 logical and 6 physical cores
+.NET SDK 10.0.302
+  [Host]   : .NET 10.0.10 (10.0.10, 10.0.1026.32716), X64 RyuJIT x86-64-v3
+  ShortRun : .NET 10.0.10 (10.0.10, 10.0.1026.32716), X64 RyuJIT x86-64-v3
+
+Job=ShortRun  IterationCount=3  LaunchCount=1  
+WarmupCount=3  
+
+| Method   | Mean     | Error    | StdDev   | Allocated |
+|--------- |---------:|---------:|---------:|----------:|
+| Evaluate | 19.67 ns | 4.523 ns | 0.248 ns |         - |
+
+// * Legends *
+  Mean      : Arithmetic mean of all measurements
+  Error     : Half of 99.9% confidence interval
+  StdDev    : Standard deviation of all measurements
+  Allocated : Allocated memory per single operation (managed only, inclusive, 1KB = 1024B)
+  1 ns      : 1 Nanosecond (0.000000001 sec)
+
+// * Diagnostic Output - MemoryDiagnoser *
+
+
+// ***** BenchmarkRunner: End *****
+Run time: 00:00:09 (9.05 sec), executed benchmarks: 1
+
+Global total time: 00:00:29 (29.57 sec), executed benchmarks: 1
+// * Artifacts cleanup *
+Artifacts cleanup is finished

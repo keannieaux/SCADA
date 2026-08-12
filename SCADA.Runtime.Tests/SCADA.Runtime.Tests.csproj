@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\SCADA.Runtime\SCADA.Runtime.csproj" />
+    <ProjectReference Include="..\SCADA.Drivers.Simulator\SCADA.Drivers.Simulator.csproj" />
   </ItemGroup>
 
 </Project>

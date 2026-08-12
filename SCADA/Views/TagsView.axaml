@@ -1,0 +1,32 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:SCADA.ViewModels"
+             x:Class="SCADA.Views.TagsView"
+             x:DataType="vm:TagsViewModel">
+
+    <Grid RowDefinitions="Auto,*">
+
+        <Grid Grid.Row="0" ColumnDefinitions="*,120,80,100" Margin="0,0,0,4">
+            <TextBlock Grid.Column="0" Classes="body" Text="Тег" FontWeight="SemiBold"/>
+            <TextBlock Grid.Column="1" Classes="body" Text="Значение" FontWeight="SemiBold"/>
+            <TextBlock Grid.Column="2" Classes="body" Text="Ед." FontWeight="SemiBold"/>
+            <TextBlock Grid.Column="3" Classes="body" Text="Качество" FontWeight="SemiBold"/>
+        </Grid>
+
+        <ItemsControl Grid.Row="1" ItemsSource="{Binding Tags}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:TagRowViewModel">
+                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="0,8">
+                        <Grid ColumnDefinitions="*,120,80,100">
+                            <TextBlock Grid.Column="0" Classes="mono" Text="{Binding Name}"/>
+                            <TextBlock Grid.Column="1" Classes="mono" Text="{Binding Value}"/>
+                            <TextBlock Grid.Column="2" Classes="mono" Text="{Binding Units}"/>
+                            <TextBlock Grid.Column="3" Classes="mono" Text="{Binding Quality}"/>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+    </Grid>
+</UserControl>

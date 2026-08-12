@@ -1,0 +1,9 @@
+{
+  "formatVersion": 1,
+  "channels": [
+    { "id": 0, "name": "SimChannel", "channelType": "none" }
+  ],
+  "devices": [
+    { "id": 0, "name": "SimPLC", "driverName": "simulator", "channelId": 0 }
+  ]
+}

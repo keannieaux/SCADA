@@ -2,9 +2,9 @@ using Avalonia.Controls;
 
 namespace SCADA.Views;
 
-public partial class SettingsView : UserControl
+public partial class EditorView : UserControl
 {
-    public SettingsView()
+    public EditorView()
     {
         InitializeComponent();
     }

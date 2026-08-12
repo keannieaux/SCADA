@@ -1,0 +1,21 @@
+{
+  "formatVersion": 1,
+  "tags": [
+    { "id": 0, "name": "Temperature", "dataType": "analog", "deviceId": 0, "address": "sin:10", "minValue": 0, "maxValue": 100, "units": "°C" },
+    { "id": 1, "name": "Pressure",    "dataType": "analog", "deviceId": 0, "address": "ramp:60", "minValue": 0, "maxValue": 10, "units": "bar" },
+    { "id": 2, "name": "PumpRunning", "dataType": "discrete", "deviceId": 0, "address": "square:5" },
+    { "id": 3, "name": "Setpoint",    "dataType": "analog", "deviceId": 0, "address": "const:7.5", "units": "°C" },
+    { "id": 4, "name": "Temperature1", "dataType": "analog", "deviceId": 0, "address": "sin:10", "minValue": 0, "maxValue": 100, "units": "°C" },
+    { "id": 5, "name": "Temperature2", "dataType": "analog", "deviceId": 0, "address": "sin:10", "minValue": 0, "maxValue": 100, "units": "°C" },
+    { "id": 6, "name": "Temperature3", "dataType": "analog", "deviceId": 0, "address": "sin:10", "minValue": 0, "maxValue": 100, "units": "°C" },
+    { "id": 7, "name": "Temperature4", "dataType": "analog", "deviceId": 0, "address": "sin:10", "minValue": 0, "maxValue": 100, "units": "°C" },
+    { "id": 8, "name": "Temperature5", "dataType": "analog", "deviceId": 0, "address": "sin:10", "minValue": 0, "maxValue": 100, "units": "°C" },
+    { "id": 9, "name": "Temperature6", "dataType": "analog", "deviceId": 0, "address": "sin:10", "minValue": 0, "maxValue": 100, "units": "°C" },
+    { "id": 10, "name": "Temperature7", "dataType": "analog", "deviceId": 0, "address": "sin:10", "minValue": 0, "maxValue": 100, "units": "°C" },
+    { "id": 11, "name": "Temperature8", "dataType": "analog", "deviceId": 0, "address": "sin:10", "minValue": 0, "maxValue": 100, "units": "°C" },
+    { "id": 12, "name": "Temperature9", "dataType": "analog", "deviceId": 0, "address": "sin:10", "minValue": 0, "maxValue": 100, "units": "°C" },
+    { "id": 13, "name": "Temperature10", "dataType": "analog", "deviceId": 0, "address": "sin:10", "minValue": 0, "maxValue": 100, "units": "°C" }
+
+  ]
+}
+

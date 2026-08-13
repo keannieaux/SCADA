@@ -5,6 +5,7 @@ namespace SCADA.Runtime.Configuration;
 
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
+    WriteIndented = true,
     Converters =[typeof(TagIdJsonConverter),
                  typeof(DeviceIdJsonConverter),
                  typeof(ChannelIdJsonConverter),

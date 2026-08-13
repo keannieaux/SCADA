@@ -16,7 +16,7 @@ public sealed class InternalDriver : IDeviceDriver
     public Task DisconnectAsync()
         => Task.CompletedTask;
 
-    public ValueTask<bool> PollAsync(Span<TagValue> results, CancellationToken ct)
+    public ValueTask<bool> PollAsync(Memory<TagValue> results, CancellationToken ct)
         => ValueTask.FromResult(false); // данные пишутся снаружи, движку писать нечего
 
 

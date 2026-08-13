@@ -97,4 +97,18 @@ public class PollingEngineTests
 
         Assert.True(table.CurrentEpoch > epochAtStart);
     }
+
+    [Fact]
+    public async Task Poll_AppliesScaleFromTagDefinition()
+    {
+        // const:7.5 с ScaleFactor=2 и ScaleOffset=-5 → 7.5*2-5 = 10
+        var config = CreateConfig();
+        config.Tags[0].ScaleFactor = 2.0;
+        config.Tags[0].ScaleOffset = -5.0;
+
+        var table = new TagTable.TagTable(capacity: 10);
+        await RunFor(config, table, milliseconds: 100);
+
+        Assert.Equal(10.0, table.Read(new TagId(0)).Value);
+    }
 }

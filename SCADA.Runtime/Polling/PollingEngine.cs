@@ -126,7 +126,14 @@ public sealed class PollingEngine
         if (!hasFreshValues)
             return;
 
+        // Инвариант: в TagTable значения всегда в ИНЖЕНЕРНЫХ единицах.
+        // Драйверы отдают сырые значения, масштаб применяется здесь —
+        // один раз для всех протоколов (дефолт factor=1/offset=0 — тождественно).
         for (int i = 0; i < tags.Length; i++)
-            _tagTable.Write(tags[i].Id, buffer[i]);
+        {
+            var raw = buffer[i];
+            double scaled = raw.Value * tags[i].ScaleFactor + tags[i].ScaleOffset;
+            _tagTable.Write(tags[i].Id, new TagValue(scaled, raw.TimeStampUtc, raw.Quality));
+        }
     }
 }

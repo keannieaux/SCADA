@@ -10,6 +10,7 @@
     <PackageVersion Include="AvaloniaUI.DiagnosticsSupport" Version="2.2.3" />
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
     <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageVersion Include="FluentModbus" Version="5.3.2" />
     <PackageVersion Include="Grpc.AspNetCore" Version="2.64.0" />
     <PackageVersion Include="FluentIcons.Avalonia" Version="2.1.335" />
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.10" />

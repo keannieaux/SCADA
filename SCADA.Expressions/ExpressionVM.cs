@@ -10,15 +10,16 @@ public static class ExpressionVM
         int sp = 0;
 
         byte[] code = expression.Code;
-        for(int ip = 0; ip < code.Length;)
+        int ip = 0;
+        while (ip < code.Length)
         {
             switch ((OpCode)code[ip++])
             {
                 case OpCode.LoadConst:
-                    stack[sp++] = expression.Constants[code[ip++]];
+                    stack[sp++] = expression.Constants[ReadInt(code, ref ip)];
                     break;
                 case OpCode.LoadTag:
-                    stack[sp++] = context.Tags.Read(new TagId(code[ip++])).Value;
+                    stack[sp++] = context.Tags.Read(new TagId(ReadInt(code, ref ip))).Value;
                     break;
                 case OpCode.Add:
                     stack[--sp - 1] += stack[sp];
@@ -57,22 +58,21 @@ public static class ExpressionVM
                     stack[sp - 1] = stack[sp - 1] == 0.0 ? 1.0 : 0.0;
                     break;
 
-                // операнд — абсолютная позиция (2 байта, little-endian)
                 case OpCode.JumpIfFalse:
                 {
-                    int target = code[ip++] | (code[ip++] << 8);
+                    int target = ReadInt(code, ref ip);
                     if (stack[--sp] == 0.0)
                         ip = target;
                     break;
                 }
                 case OpCode.Jump:
-                    ip = code[ip++] | (code[ip++] << 8);
+                    ip = ReadInt(code, ref ip);
                     break;
 
-                // операнды: 1 байт — id функции, 1 байт — число аргументов
+                // операнды: 4 байта — id функции, 1 байт — число аргументов
                 case OpCode.CallBuiltin:
                 {
-                    int funcId = code[ip++];
+                    int funcId = ReadInt(code, ref ip);
                     int argCount = code[ip++];
                     sp -= argCount;
                     // аргументы — срез прямо на стеке: ни копий, ни аллокаций;
@@ -91,5 +91,13 @@ public static class ExpressionVM
         }
 
         throw new InvalidOperationException("Выражение завершилось без Return");
+    }
+
+    // все индексы и адреса в байткоде — 4-байтные int, little-endian
+    private static int ReadInt(byte[] code, ref int ip)
+    {
+        int value = BitConverter.ToInt32(code, ip);
+        ip += 4;
+        return value;
     }
 }

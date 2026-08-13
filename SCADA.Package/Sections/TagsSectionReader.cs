@@ -50,6 +50,10 @@ public static class TagsSectionReader
             Logging = ReadLogging(reader)
         };
 
+        // Origin — поле более поздней раскладки; читаем, только если оно есть в записи
+        if (stream.Position < recordEnd)
+            tag.Origin = (TagOrigin)reader.ReadByte();
+
         // хвост записи (поля более нового формата) пропускаем
         stream.Position = recordEnd;
         return tag;

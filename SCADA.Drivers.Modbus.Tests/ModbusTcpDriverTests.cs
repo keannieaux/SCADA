@@ -82,4 +82,28 @@ public class ModbusTcpDriverTests : IDisposable
         await Assert.ThrowsAnyAsync<Exception>(
             () => driver.PollAsync(new TagValue[1], CancellationToken.None).AsTask());
     }
+
+    [Fact]
+    public async Task Poll_CoilsAcrossByteBoundary_UnpacksCorrectly()
+    {
+        // биты в ответе упакованы: coil:7 = data[0] бит 7, coil:9 = data[1] бит 1
+        lock (_server.Lock)
+        {
+            _server.GetCoils().Set(address: 7, value: true);
+            _server.GetCoils().Set(address: 9, value: true);
+        }
+
+        var tags = new[] { Tag(0, "coil:7"), Tag(1, "coil:8"), Tag(2, "coil:9") };
+        var driver = new ModbusTcpDriver();
+        await driver.ConnectAsync(Device, tags, CancellationToken.None);
+
+        var results = new TagValue[tags.Length];
+        await driver.PollAsync(results, CancellationToken.None);
+
+        Assert.Equal(1.0, results[0].Value); // coil:7
+        Assert.Equal(0.0, results[1].Value); // coil:8 — не установлен
+        Assert.Equal(1.0, results[2].Value); // coil:9 — второй байт ответа
+
+        await driver.DisconnectAsync();
+    }
 }

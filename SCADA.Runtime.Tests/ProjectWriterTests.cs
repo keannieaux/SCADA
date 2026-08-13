@@ -56,12 +56,17 @@ public class ProjectWriterTests : IDisposable
 
         Assert.Equal(original.Name, loaded.Name);
         Assert.Equal(original.Version, loaded.Version);
-        Assert.Equal(original.Tags.Count, loaded.Tags.Count);
-        Assert.Equal(original.Devices.Count, loaded.Devices.Count);
+
+        // при загрузке добавляется системная диагностика каналов (§7.4):
+        // 1 устройство + 7 тегов на канал — сравниваем только исходные сущности
+        var loadedSourceTags = loaded.Tags.Where(t => t.Origin == TagOrigin.Process).ToArray();
+        var loadedSourceDevices = loaded.Devices.Where(d => !d.Name.StartsWith('@')).ToArray();
+        Assert.Equal(original.Tags.Count, loadedSourceTags.Length);
+        Assert.Equal(original.Devices.Count, loadedSourceDevices.Length);
         Assert.Equal(original.Channels.Count, loaded.Channels.Count);
 
         // точечная проверка полей, которые легко потерять при сериализации
-        var temp = loaded.Tags[0];
+        var temp = loadedSourceTags[0];
         Assert.Equal("Temperature", temp.Name);
         Assert.Equal(TagDataType.Analog, temp.DataType);
         Assert.Equal("sin:10", temp.Address);
@@ -69,7 +74,7 @@ public class ProjectWriterTests : IDisposable
         Assert.Equal(2.0, temp.ScaleFactor);
         Assert.Equal("°C", temp.Units);
 
-        var mode = loaded.Tags[2];
+        var mode = loadedSourceTags[2];
         Assert.Equal(42, mode.InitValue);
         Assert.True(mode.IsPersistent);
         Assert.Equal(new DeviceId(1), mode.DeviceId);

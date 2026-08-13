@@ -9,7 +9,8 @@ namespace SCADA.Runtime.Configuration;
     Converters =[typeof(TagIdJsonConverter),
                  typeof(DeviceIdJsonConverter),
                  typeof(ChannelIdJsonConverter),
-                 typeof(JsonStringEnumConverter<TagDataType>)])]
+                 typeof(JsonStringEnumConverter<TagDataType>),
+                 typeof(JsonStringEnumConverter<TagOrigin>)])]
 
 [JsonSerializable(typeof(TagDefinition))]
 [JsonSerializable(typeof(ProjectFile))]

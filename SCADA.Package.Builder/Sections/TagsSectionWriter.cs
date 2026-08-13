@@ -48,6 +48,7 @@ public static class TagsSectionWriter
             WriteNullable(record, tag.InitValue);
             record.Write(tag.IsPersistent);
             WriteLogging(record, tag.Logging);
+            record.Write((byte)tag.Origin);
             record.Flush();
         }
 

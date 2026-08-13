@@ -27,9 +27,12 @@ public static class RequestGrouper
     /// <summary>
     /// maxGap — максимальный зазор (в регистрах/битах), через который слияние
     /// выгодно: читать 3 лишних регистра дешевле, чем делать второй запрос.
+    /// maxRegisters — потолок регистров в одном запросе; по умолчанию лимит
+    /// протокола (125), конкретный ПЛК может быть строже (настройка maxregs).
     /// </summary>
     public static IReadOnlyList<RequestBlock> Group(
-        IReadOnlyList<ModbusTagMapping> tags, int maxGap = 8)
+        IReadOnlyList<ModbusTagMapping> tags, int maxGap = 8,
+        int maxRegisters = MaxRegistersPerRequest)
     {
         var blocks = new List<RequestBlock>();
 
@@ -38,7 +41,7 @@ public static class RequestGrouper
             var sorted = tableGroup.OrderBy(t => t.Address.Offset).ToArray();
             int maxPerRequest = tableGroup.Key is ModbusTable.Coil or ModbusTable.DiscreteInput
                 ? MaxBitsPerRequest
-                : MaxRegistersPerRequest;
+                : maxRegisters;
 
             int blockStart = -1, blockEnd = -1; // [blockStart, blockEnd)
             var items = new List<BlockItem>();

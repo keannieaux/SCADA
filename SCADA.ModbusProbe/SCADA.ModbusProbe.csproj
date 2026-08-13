@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SCADA.Core\SCADA.Core.csproj" />
+    <ProjectReference Include="..\SCADA.Runtime\SCADA.Runtime.csproj" />
+    <ProjectReference Include="..\SCADA.Drivers.Modbus\SCADA.Drivers.Modbus.csproj" />
+  </ItemGroup>
+
+</Project>

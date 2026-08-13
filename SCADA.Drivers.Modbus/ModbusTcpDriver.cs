@@ -1,3 +1,4 @@
+using System.Net;
 using FluentModbus;
 using SCADA.Core.Devices;
 using SCADA.Core.Tags;
@@ -9,8 +10,9 @@ namespace SCADA.Drivers.Modbus;
 /// Драйвер Modbus TCP. При подключении парсит адреса тегов и группирует
 /// их в блоки запросов (§7.3); в цикле опроса выполняет блоки и раскладывает
 /// ответы по результатам. Значения СЫРЫЕ — масштаб применяет движок.
-/// Ошибки связи выбрасываются наружу: движок пометит теги Quality.Bad
-/// и продолжит работу; переподключение — задача следующего шага.
+/// Ошибки связи выбрасываются наружу: движок пометит теги Quality.Bad,
+/// выбросит этот экземпляр и переподключится с backoff (§4.2) — драйвер
+/// одноразовый, переподключение не его ответственность.
 /// </summary>
 public sealed class ModbusTcpDriver : IDeviceDriver
 {
@@ -21,7 +23,7 @@ public sealed class ModbusTcpDriver : IDeviceDriver
 
     public string ProtocolName => "modbus-tcp";
 
-    public Task ConnectAsync(DeviceDefinition device, IReadOnlyList<TagDefinition> tags, CancellationToken ct)
+    public async Task ConnectAsync(DeviceDefinition device, IReadOnlyList<TagDefinition> tags, CancellationToken ct)
     {
         _settings = ModbusSettings.Parse(device.Configuration);
 
@@ -29,16 +31,19 @@ public sealed class ModbusTcpDriver : IDeviceDriver
         var mappings = tags
             .Select((t, i) => new ModbusTagMapping(i, _addresses[i]))
             .ToArray();
-        _blocks = RequestGrouper.Group(mappings, _settings.MaxGap).ToArray();
+        _blocks = RequestGrouper.Group(mappings, _settings.MaxGap, _settings.MaxRegisters).ToArray();
+
+        // DNS-резолв асинхронный; сам Connect у FluentModbus только синхронный —
+        // выносим в фоновый поток, чтобы не блокировать цикл канала
+        var addresses = await Dns.GetHostAddressesAsync(_settings.Host, ct);
+        var endpoint = new IPEndPoint(addresses[0], _settings.Port);
 
         _client = new ModbusTcpClient
         {
             ReadTimeout = _settings.TimeoutMs,
             WriteTimeout = _settings.TimeoutMs
         };
-        _client.Connect($"{_settings.Host}:{_settings.Port}");
-
-        return Task.CompletedTask;
+        await Task.Run(() => _client.Connect(endpoint), ct);
     }
 
     public async ValueTask<bool> PollAsync(Memory<TagValue> results, CancellationToken ct)

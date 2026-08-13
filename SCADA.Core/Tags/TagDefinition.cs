@@ -26,6 +26,9 @@ public class TagDefinition
     public double? InitValue { get; set; }
     public bool IsPersistent { get; set; }
 
+    /// <summary>Происхождение тега: из исходного проекта или сгенерирован системой.</summary>
+    public TagOrigin Origin { get; set; } = TagOrigin.Process;
+
      public TagLoggingConfiguration? Logging { get; set; }
 
 }

@@ -62,18 +62,25 @@ public class PackageBuilderTests : IDisposable
         Assert.Equal("BoilerRoom", config.Name);
         Assert.Equal("3.1", config.Version);
 
-        Assert.Equal(2, config.Tags.Count);
+        // пакет несёт и сгенерированную диагностику канала: 7 тегов на канал
+        Assert.Equal(2 + 7, config.Tags.Count);
         var temp = config.Tags[0];
         Assert.Equal("Boiler1.Temp", temp.Name);
         Assert.Equal(TagDataType.Analog, temp.DataType);
         Assert.Equal("sin:10", temp.Address);
         Assert.Equal(150, temp.MaxValue);
         Assert.Equal("°C", temp.Units);
+        Assert.Equal(TagOrigin.Process, temp.Origin);
+
+        // диагностический тег прошёл сквозь пакет с сохранением Origin
+        var connected = config.Tags[2];
+        Assert.Equal("@Line1.Connected", connected.Name);
+        Assert.Equal(TagOrigin.Diagnostics, connected.Origin);
 
         var channel = Assert.Single(config.Channels);
         Assert.Equal("192.168.0.10:502", channel.Configuration);
-        var device = Assert.Single(config.Devices);
-        Assert.Equal("simulator", device.DriverName);
+        Assert.Equal(2, config.Devices.Count); // PLC1 + диагностическое "@Line1"
+        Assert.Equal("simulator", config.Devices[0].DriverName);
     }
 
     [Fact]

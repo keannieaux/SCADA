@@ -51,6 +51,32 @@ public class RequestGrouperTests
     }
 
     [Fact]
+    public void Group_MaxRegistersOverride_SplitsStricter()
+    {
+        // ПЛК с лимитом 10 регистров на запрос (maxregs=10)
+        var blocks = RequestGrouper.Group(
+            [Tag(0, "hr:0"), Tag(1, "hr:9"), Tag(2, "hr:10")], maxGap: 1000, maxRegisters: 10);
+
+        Assert.Equal(2, blocks.Count);
+        Assert.Equal(10, blocks[0].Count); // 0..9
+        Assert.Equal(10, blocks[1].Start);
+    }
+
+    [Fact]
+    public void Group_FloatCrossingLimit_GoesToNextBlock()
+    {
+        // f32 на регистрах 124-125 целиком не влезает в блок с лимитом 125 —
+        // значение нельзя рвать между запросами, поэтому оно уходит в новый блок
+        var blocks = RequestGrouper.Group(
+            [Tag(0, "hr:0"), Tag(1, "hr:124:f32")], maxGap: 1000);
+
+        Assert.Equal(2, blocks.Count);
+        Assert.Equal(1, blocks[0].Count);        // только hr:0
+        Assert.Equal(124, blocks[1].Start);      // 124..125
+        Assert.Equal(2, blocks[1].Count);
+    }
+
+    [Fact]
     public void Group_DifferentTables_NeverMixed()
     {
         var blocks = RequestGrouper.Group(

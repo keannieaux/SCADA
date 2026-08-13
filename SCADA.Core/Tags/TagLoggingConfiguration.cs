@@ -2,9 +2,9 @@ namespace SCADA.Core.Tags;
 
 public class TagLoggingConfiguration
 {
-    public bool LogOnChange { get; init; }
-    public TimeSpan? Interval { get; init; }
-    public IReadOnlyList<LogScheduleEntry> Schedule { get; init; } = Array.Empty<LogScheduleEntry>();
+    public bool LogOnChange { get; set; }
+    public TimeSpan? Interval { get; set; }
+    public IReadOnlyList<LogScheduleEntry> Schedule { get; set; } = Array.Empty<LogScheduleEntry>();
 
     public DateTimeOffset GetNextLoggingTime(DateTimeOffset now, DateTimeOffset lastLoggedTime)
     {
@@ -27,10 +27,10 @@ public class TagLoggingConfiguration
 
 public class LogScheduleEntry
 {
-    public required TimeOnly Time { get; init; }
-    public DayOfWeek? DayOfWeek { get; init; }
-    public int? DayOfMonth { get; init; }
-    public int? Month { get; init; }
+    public required TimeOnly Time { get; set; }
+    public DayOfWeek? DayOfWeek { get; set; }
+    public int? DayOfMonth { get; set; }
+    public int? Month { get; set; }
 
     public DateTimeOffset GetNextOccurrence(DateTimeOffset from)
     {

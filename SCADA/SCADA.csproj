@@ -8,6 +8,7 @@
         <Folder Include="Models\" />
         <AvaloniaResource Include="Assets\**" />
         <ProjectReference Include="..\SCADA.Runtime\SCADA.Runtime.csproj" />
+        <ProjectReference Include="..\SCADA.Graphics\SCADA.Graphics.csproj"/>
         <None Include="TestProject\**" CopyToOutputDirectory="PreserveNewest" />
     </ItemGroup>
 

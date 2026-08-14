@@ -1,0 +1,14 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\SCADA.Core\SCADA.Core.csproj" />
+    <ProjectReference Include="..\SCADA.Expressions\SCADA.Expressions.csproj" />
+    <ProjectReference Include="..\SCADA.Expressions.Compiler\SCADA.Expressions.Compiler.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Skia" />
+  </ItemGroup>
+
+</Project>

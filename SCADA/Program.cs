@@ -8,6 +8,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using SCADA.ViewModels;
 using SCADA.Views;
+using SCADA.Core.Tags;
 
 namespace SCADA;
 
@@ -27,7 +28,8 @@ sealed class Program
         var runtimeClient = new LocalRuntimeClient(tagTable);
         var pollingEngine = new PollingEngine(config, tagTable);
 
-
+        builder.Services.AddSingleton<ITagTable>(tagTable);
+        builder.Services.AddTransient<SchemesViewModel>();
         builder.Services.AddSingleton<IRuntimeClient>(runtimeClient);
         builder.Services.AddSingleton(pollingEngine);
         builder.Services.AddSingleton<LoginViewModel>();

@@ -5,6 +5,10 @@ namespace SCADA.Runtime.Historian;
 
 public sealed class InMemoryHistorian : IHistorian
 {
+    // ВНИМАНИЕ: это заглушка для разработки трендов (§16.4), а не хранилище.
+    // Час данных всех тегов в RAM невозможен физически (20k × 3600 × 24 Б ≈ 1.7 ГБ) —
+    // боевой архив M4 дисковый, со сжатием и агрегатами (§8).
+    // Спасает ленивое выделение: буферы создаются только для пишущихся тегов.
     private readonly int _capacityPerTag;
     private readonly RingBuffer?[] _buffers;
 

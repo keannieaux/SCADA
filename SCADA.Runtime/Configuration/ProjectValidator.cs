@@ -8,6 +8,8 @@ namespace SCADA.Runtime.Configuration;
 /// редактор — для проверки перед сохранением.
 /// Новая сущность конфигурации (alarms, users, archive-groups) =
 /// новый приватный метод + одна строка в Validate.
+/// Validate работает с ИСХОДНОЙ формой проекта: сгенерированной системной
+/// диагностики (§7.4) в ней быть не должно — это проверяется.
 /// </summary>
 public static class ProjectValidator
 {
@@ -20,6 +22,7 @@ public static class ProjectValidator
         var errors = new List<string>();
         ValidateReferences(config, errors);
         ValidateTagIds(config.Tags, errors);
+        ValidateNoSystemEntities(config, errors);
         return errors;
     }
 
@@ -53,5 +56,22 @@ public static class ProjectValidator
                 errors.Add($"TagId не покрывают диапазон [0, {sorted.Length}): ожидался id={i}, найден id={sorted[i]}");
                 break; // одной такой ошибки достаточно
             }
+    }
+
+    // системные сущности генерируются при загрузке (§7.4) — в исходной форме
+    // их быть не должно: иначе возможны коллизии с тем, что создаст генератор
+    private static void ValidateNoSystemEntities(ProjectConfiguration config, List<string> errors)
+    {
+        foreach (var device in config.Devices)
+            if (DiagnosticsGenerator.IsSystemDevice(device))
+                errors.Add($"Устройство '{device.Name}': префикс '{DiagnosticsGenerator.SystemPrefix}' зарезервирован за системной диагностикой");
+
+        foreach (var tag in config.Tags)
+        {
+            if (tag.Name.StartsWith(DiagnosticsGenerator.SystemPrefix))
+                errors.Add($"Тег '{tag.Name}' (id={tag.Id.Value}): префикс '{DiagnosticsGenerator.SystemPrefix}' зарезервирован за системной диагностикой");
+            if (tag.Origin != TagOrigin.Process)
+                errors.Add($"Тег '{tag.Name}' (id={tag.Id.Value}): Origin={tag.Origin} недопустим в исходном проекте — системные теги генерируются при загрузке");
+        }
     }
 }

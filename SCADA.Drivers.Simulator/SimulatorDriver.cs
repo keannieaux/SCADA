@@ -23,14 +23,15 @@ public sealed class SimulatorDriver : IDeviceDriver
         return Task.CompletedTask;
     }
 
-    public ValueTask<bool> PollAsync(Span<TagValue> results, CancellationToken ct)
+    public ValueTask<bool> PollAsync(Memory<TagValue> results, CancellationToken ct)
     {
         var now = _clock();
         double seconds = now.ToUnixTimeMilliseconds() / 1000.0;
         long timestamp = now.ToUnixTimeMilliseconds();
 
+        var span = results.Span;
         for (int i = 0; i < _tags.Length; i++)
-            results[i] = new TagValue(_signals[i].GetValue(seconds, _tags[i]), timestamp, Quality.Good);
+            span[i] = new TagValue(_signals[i].GetValue(seconds, _tags[i]), timestamp, Quality.Good);
 
         return ValueTask.FromResult(true);
     }

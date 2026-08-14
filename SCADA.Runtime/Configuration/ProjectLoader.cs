@@ -41,6 +41,11 @@ public static class ProjectLoader
         if (errors.Count > 0)
             throw new ProjectConfigurationException(errors);
 
+        // диагностические теги каналов (§7.4) добавляются после валидации
+        // исходной формы; PackageBuilder идёт через этот же Load, поэтому
+        // Id диагностики совпадают между пакетом и рантаймом
+        DiagnosticsGenerator.AppendDiagnostics(config);
+
         return config;
     }
 

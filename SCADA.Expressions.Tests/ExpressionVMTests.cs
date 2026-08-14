@@ -6,13 +6,13 @@ namespace SCADA.Expressions.Tests;
 public class ExpressionVMTests
 {
     // байткод собирается руками, но читается как программа
-    private static Expression Program(double[] constants, params byte[] code)
+    private static Expression Program(double[] constants, byte[] code)
         => new() { Code = code, Constants = constants };
 
     private static byte Op(OpCode op) => (byte)op;
 
-    // операнд перехода — абсолютная позиция, 2 байта little-endian
-    private static byte[] Addr(int position) => [(byte)position, (byte)(position >> 8)];
+    // все индексы и адреса — 4-байтные int, little-endian
+    private static byte[] I4(int value) => BitConverter.GetBytes(value);
 
     private static EvaluationContext ContextFor(ITagTable table)
         => new() { Tags = table };
@@ -24,10 +24,10 @@ public class ExpressionVMTests
     public void Evaluate_TwoConstantsAdded_ReturnsSum()
     {
         var expr = Program([2.0, 3.0],
-            Op(OpCode.LoadConst), 0,
-            Op(OpCode.LoadConst), 1,
-            Op(OpCode.Add),
-            Op(OpCode.Return));
+            [Op(OpCode.LoadConst), ..I4(0),
+             Op(OpCode.LoadConst), ..I4(1),
+             Op(OpCode.Add),
+             Op(OpCode.Return)]);
 
         Assert.Equal(5.0, ExpressionVM.Evaluate(expr, EmptyContext()));
     }
@@ -37,12 +37,12 @@ public class ExpressionVMTests
     {
         // (10 - 4) / 2 = 3
         var expr = Program([10.0, 4.0, 2.0],
-            Op(OpCode.LoadConst), 0,
-            Op(OpCode.LoadConst), 1,
-            Op(OpCode.Sub),
-            Op(OpCode.LoadConst), 2,
-            Op(OpCode.Div),
-            Op(OpCode.Return));
+            [Op(OpCode.LoadConst), ..I4(0),
+             Op(OpCode.LoadConst), ..I4(1),
+             Op(OpCode.Sub),
+             Op(OpCode.LoadConst), ..I4(2),
+             Op(OpCode.Div),
+             Op(OpCode.Return)]);
 
         Assert.Equal(3.0, ExpressionVM.Evaluate(expr, EmptyContext()));
     }
@@ -51,7 +51,7 @@ public class ExpressionVMTests
     public void Evaluate_NoReturnInstruction_Throws()
     {
         var expr = Program([2.0],
-            Op(OpCode.LoadConst), 0);
+            [Op(OpCode.LoadConst), ..I4(0)]);
 
         Assert.Throws<InvalidOperationException>(() => ExpressionVM.Evaluate(expr, EmptyContext()));
     }
@@ -65,10 +65,10 @@ public class ExpressionVMTests
 
         // Tag0 + Tag1
         var expr = Program([],
-            Op(OpCode.LoadTag), 0,
-            Op(OpCode.LoadTag), 1,
-            Op(OpCode.Add),
-            Op(OpCode.Return));
+            [Op(OpCode.LoadTag), ..I4(0),
+             Op(OpCode.LoadTag), ..I4(1),
+             Op(OpCode.Add),
+             Op(OpCode.Return)]);
 
         Assert.Equal(42.5, ExpressionVM.Evaluate(expr, ContextFor(table)));
     }
@@ -81,10 +81,10 @@ public class ExpressionVMTests
 
         // Tag0 > 80
         var expr = Program([80.0],
-            Op(OpCode.LoadTag), 0,
-            Op(OpCode.LoadConst), 0,
-            Op(OpCode.Greater),
-            Op(OpCode.Return));
+            [Op(OpCode.LoadTag), ..I4(0),
+             Op(OpCode.LoadConst), ..I4(0),
+             Op(OpCode.Greater),
+             Op(OpCode.Return)]);
 
         Assert.Equal(1.0, ExpressionVM.Evaluate(expr, ContextFor(table)));
 
@@ -96,19 +96,19 @@ public class ExpressionVMTests
     public void Evaluate_LogicalAnd_ShortCircuitsViaJumpIfFalse()
     {
         // Tag0 > 80 && Tag1 > 0
-        // разметка кода: 0:LoadTag 2:LoadConst 4:Greater 5:JIF->16
-        //                8:LoadTag 10:LoadConst 12:Greater 13:Jump->18 16:LoadConst 18:Return
+        // разметка (операнды по 4 байта): 0:LoadTag 5:LoadConst 10:Greater
+        //   11:JIF->32  16:LoadTag 21:LoadConst 26:Greater 27:Jump->35  32:LoadConst 37? — см. код
         var expr = Program([80.0, 0.0],
-            Op(OpCode.LoadTag), 0,
-            Op(OpCode.LoadConst), 0,
-            Op(OpCode.Greater),
-            Op(OpCode.JumpIfFalse), Addr(16)[0], Addr(16)[1],
-            Op(OpCode.LoadTag), 1,
-            Op(OpCode.LoadConst), 1,
-            Op(OpCode.Greater),
-            Op(OpCode.Jump), Addr(18)[0], Addr(18)[1],
-            Op(OpCode.LoadConst), 1,   // ложь: кладём 0.0
-            Op(OpCode.Return));
+            [Op(OpCode.LoadTag), ..I4(0),        // 0-4
+             Op(OpCode.LoadConst), ..I4(0),      // 5-9
+             Op(OpCode.Greater),                 // 10
+             Op(OpCode.JumpIfFalse), ..I4(32),   // 11-15
+             Op(OpCode.LoadTag), ..I4(1),        // 16-20
+             Op(OpCode.LoadConst), ..I4(1),      // 21-25
+             Op(OpCode.Greater),                 // 26
+             Op(OpCode.Jump), ..I4(37),          // 27-31
+             Op(OpCode.LoadConst), ..I4(1),      // 32-36: ложь
+             Op(OpCode.Return)]);                // 37
 
         var table = new TagTable(capacity: 2);
 
@@ -117,7 +117,7 @@ public class ExpressionVMTests
         table.Write(new TagId(1), new TagValue(1.0, 1000, Quality.Good));
         Assert.Equal(1.0, ExpressionVM.Evaluate(expr, ContextFor(table)));
 
-        // первое ложно — второе даже не вычисляется (Tag1 оставим мусорным)
+        // первое ложно — второе даже не вычисляется
         table.Write(new TagId(0), new TagValue(50.0, 2000, Quality.Good));
         Assert.Equal(0.0, ExpressionVM.Evaluate(expr, ContextFor(table)));
     }
@@ -126,16 +126,16 @@ public class ExpressionVMTests
     public void Evaluate_Ternary_PicksBranch()
     {
         // Tag0 > 80 ? 10 : 20
-        // 0:LoadTag 2:LoadConst 4:Greater 5:JIF->13 8:LoadConst(10) 10:Jump->15 13:LoadConst(20) 15:Return
+        // 0:LoadTag 5:LoadConst 10:Greater 11:JIF->26 16:LoadConst(10) 21:Jump->31 26:LoadConst(20) 31:Return
         var expr = Program([80.0, 10.0, 20.0],
-            Op(OpCode.LoadTag), 0,
-            Op(OpCode.LoadConst), 0,
-            Op(OpCode.Greater),
-            Op(OpCode.JumpIfFalse), Addr(13)[0], Addr(13)[1],
-            Op(OpCode.LoadConst), 1,
-            Op(OpCode.Jump), Addr(15)[0], Addr(15)[1],
-            Op(OpCode.LoadConst), 2,
-            Op(OpCode.Return));
+            [Op(OpCode.LoadTag), ..I4(0),        // 0-4
+             Op(OpCode.LoadConst), ..I4(0),      // 5-9
+             Op(OpCode.Greater),                 // 10
+             Op(OpCode.JumpIfFalse), ..I4(26),   // 11-15
+             Op(OpCode.LoadConst), ..I4(1),      // 16-20: 10
+             Op(OpCode.Jump), ..I4(31),          // 21-25
+             Op(OpCode.LoadConst), ..I4(2),      // 26-30: 20
+             Op(OpCode.Return)]);                // 31
 
         var table = new TagTable(capacity: 1);
         table.Write(new TagId(0), new TagValue(100.0, 1000, Quality.Good));
@@ -153,11 +153,11 @@ public class ExpressionVMTests
 
         // !(Tag0 != 5)  →  !(0)  →  1
         var expr = Program([5.0],
-            Op(OpCode.LoadTag), 0,
-            Op(OpCode.LoadConst), 0,
-            Op(OpCode.NotEqual),
-            Op(OpCode.Not),
-            Op(OpCode.Return));
+            [Op(OpCode.LoadTag), ..I4(0),
+             Op(OpCode.LoadConst), ..I4(0),
+             Op(OpCode.NotEqual),
+             Op(OpCode.Not),
+             Op(OpCode.Return)]);
 
         Assert.Equal(1.0, ExpressionVM.Evaluate(expr, ContextFor(table)));
     }
@@ -169,9 +169,9 @@ public class ExpressionVMTests
 
         // IsGood(Tag0)  — аргумент функции: ИНДЕКС тега
         var expr = Program([0.0],
-            Op(OpCode.LoadConst), 0,                 // индекс тега 0
-            Op(OpCode.CallBuiltin), BuiltinFunctions.IsGood, 1,
-            Op(OpCode.Return));
+            [Op(OpCode.LoadConst), ..I4(0),           // индекс тега 0
+             Op(OpCode.CallBuiltin), ..I4(BuiltinFunctions.IsGood), 1,
+             Op(OpCode.Return)]);
 
         table.Write(new TagId(0), new TagValue(42.0, 1000, Quality.Good));
         Assert.Equal(1.0, ExpressionVM.Evaluate(expr, ContextFor(table)));
@@ -187,10 +187,10 @@ public class ExpressionVMTests
 
         // ValueOr(Tag0, -1)
         var expr = Program([0.0, -1.0],
-            Op(OpCode.LoadConst), 0,                 // индекс тега 0
-            Op(OpCode.LoadConst), 1,                 // значение по умолчанию -1
-            Op(OpCode.CallBuiltin), BuiltinFunctions.ValueOr, 2,
-            Op(OpCode.Return));
+            [Op(OpCode.LoadConst), ..I4(0),           // индекс тега 0
+             Op(OpCode.LoadConst), ..I4(1),           // значение по умолчанию -1
+             Op(OpCode.CallBuiltin), ..I4(BuiltinFunctions.ValueOr), 2,
+             Op(OpCode.Return)]);
 
         table.Write(new TagId(0), new TagValue(42.0, 1000, Quality.Good));
         Assert.Equal(42.0, ExpressionVM.Evaluate(expr, ContextFor(table)));
@@ -204,11 +204,11 @@ public class ExpressionVMTests
     {
         // Clamp(150, 0, 100) = 100
         var expr = Program([150.0, 0.0, 100.0],
-            Op(OpCode.LoadConst), 0,
-            Op(OpCode.LoadConst), 1,
-            Op(OpCode.LoadConst), 2,
-            Op(OpCode.CallBuiltin), BuiltinFunctions.Clamp, 3,
-            Op(OpCode.Return));
+            [Op(OpCode.LoadConst), ..I4(0),
+             Op(OpCode.LoadConst), ..I4(1),
+             Op(OpCode.LoadConst), ..I4(2),
+             Op(OpCode.CallBuiltin), ..I4(BuiltinFunctions.Clamp), 3,
+             Op(OpCode.Return)]);
 
         Assert.Equal(100.0, ExpressionVM.Evaluate(expr, EmptyContext()));
     }
@@ -217,18 +217,18 @@ public class ExpressionVMTests
     public void Evaluate_RealScadaExpression_IsGoodAndThreshold()
     {
         // IsGood(Tag0) && Tag0 > 80 — эталонное выражение из ТЗ §11.2
-        // разметка: 0:LoadConst(индекс) 2:CallBuiltin 5:JIF->16 8:LoadTag
-        //           10:LoadConst(80) 12:Greater 13:Jump->18 16:LoadConst(ложь) 18:Return
+        // 0:LoadConst(индекс) 5:CallBuiltin(4+1 байт операндов) 11:JIF->32
+        // 16:LoadTag 21:LoadConst(80) 26:Greater 27:Jump->37 32:LoadConst(ложь) 37:Return
         var expr = Program([0.0, 80.0, 0.0],
-            Op(OpCode.LoadConst), 0,                 // 0-1: индекс тега
-            Op(OpCode.CallBuiltin), BuiltinFunctions.IsGood, 1,  // 2-4
-            Op(OpCode.JumpIfFalse), Addr(16)[0], Addr(16)[1],    // 5-7
-            Op(OpCode.LoadTag), 0,                   // 8-9
-            Op(OpCode.LoadConst), 1,                 // 10-11: 80
-            Op(OpCode.Greater),                      // 12
-            Op(OpCode.Jump), Addr(18)[0], Addr(18)[1],           // 13-15
-            Op(OpCode.LoadConst), 2,                 // 16-17: ложь
-            Op(OpCode.Return));                      // 18
+            [Op(OpCode.LoadConst), ..I4(0),                        // 0-4
+             Op(OpCode.CallBuiltin), ..I4(BuiltinFunctions.IsGood), 1,  // 5-10
+             Op(OpCode.JumpIfFalse), ..I4(32),                     // 11-15
+             Op(OpCode.LoadTag), ..I4(0),                          // 16-20
+             Op(OpCode.LoadConst), ..I4(1),                        // 21-25: 80
+             Op(OpCode.Greater),                                   // 26
+             Op(OpCode.Jump), ..I4(37),                            // 27-31
+             Op(OpCode.LoadConst), ..I4(2),                        // 32-36: ложь
+             Op(OpCode.Return)]);                                  // 37
 
         var table = new TagTable(capacity: 1);
         table.Write(new TagId(0), new TagValue(100.0, 1000, Quality.Good));

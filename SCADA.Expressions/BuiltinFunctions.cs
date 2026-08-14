@@ -3,6 +3,15 @@ using SCADA.Core.Tags;
 namespace SCADA.Expressions;
 
 /// <summary>
+/// Метаданные встроенной функции. Единый источник для ВМ (Impl),
+/// компилятора (ArgCount, TagRefArgs) и редактора (Name — автодополнение §11.9).
+/// TagRefArgs — индексы аргументов, которые являются ССЫЛКОЙ на тег:
+/// для них эмитится индекс тега (LoadConst), а не значение (LoadTag),
+/// потому что качество живёт в таблице, не на стеке.
+/// </summary>
+public sealed record BuiltinInfo(string Name, int Id, int ArgCount, int[] TagRefArgs, BuiltinFunction Impl);
+
+/// <summary>
 /// Реестр встроенных функций. Id функции = индекс в таблице, он попадает
 /// в байткод пакета. ПРАВИЛО ФОРМАТА: id append-only — новые функции
 /// только в конец, слоты удалённых не переиспользуются,
@@ -17,17 +26,24 @@ public static class BuiltinFunctions
     public const int Max = 4;
     public const int Clamp = 5;
 
-    private static readonly BuiltinFunction[] _table =
+    private static readonly BuiltinInfo[] _table =
     [
-        IsGoodImpl,
-        ValueOrImpl,
-        (args, _) => Math.Abs(args[0]),
-        (args, _) => Math.Min(args[0], args[1]),
-        (args, _) => Math.Max(args[0], args[1]),
-        (args, _) => Math.Clamp(args[0], args[1], args[2]),
+        new(nameof(IsGood), IsGood, ArgCount: 1, TagRefArgs: [0], IsGoodImpl),
+        new(nameof(ValueOr), ValueOr, ArgCount: 2, TagRefArgs: [0], ValueOrImpl),
+        new(nameof(Abs), Abs, ArgCount: 1, TagRefArgs: [], (args, _) => Math.Abs(args[0])),
+        new(nameof(Min), Min, ArgCount: 2, TagRefArgs: [], (args, _) => Math.Min(args[0], args[1])),
+        new(nameof(Max), Max, ArgCount: 2, TagRefArgs: [], (args, _) => Math.Max(args[0], args[1])),
+        new(nameof(Clamp), Clamp, ArgCount: 3, TagRefArgs: [], (args, _) => Math.Clamp(args[0], args[1], args[2])),
     ];
 
-    public static BuiltinFunction Get(int id) => _table[id];
+    // имена регистронезависимы: isgood(t) и IsGood(t) — одна функция
+    private static readonly Dictionary<string, BuiltinInfo> _byName =
+        _table.ToDictionary(f => f.Name, StringComparer.OrdinalIgnoreCase);
+
+    public static BuiltinFunction Get(int id) => _table[id].Impl;
+
+    public static bool TryGetByName(string name, out BuiltinInfo info)
+        => _byName.TryGetValue(name, out info!);
 
     private static double IsGoodImpl(ReadOnlySpan<double> args, EvaluationContext context)
     {

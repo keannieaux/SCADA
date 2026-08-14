@@ -1,0 +1,13 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\SCADA.Package\SCADA.Package.csproj" />
+    <ProjectReference Include="..\SCADA.Runtime\SCADA.Runtime.csproj" />
+    <ProjectReference Include="..\SCADA.Expressions\SCADA.Expressions.csproj" />
+    <ProjectReference Include="..\SCADA.Expressions.Compiler\SCADA.Expressions.Compiler.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+  </PropertyGroup>
+
+</Project>

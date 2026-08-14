@@ -36,6 +36,9 @@ _ReSharper*/
 TestResults/
 coverage/
 
+# BenchmarkDotNet
+BenchmarkDotNet.Artifacts/
+
 # Local databases
 *.db
 

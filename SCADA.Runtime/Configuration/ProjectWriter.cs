@@ -13,9 +13,20 @@ public static class ProjectWriter
 {
     public static void Save(ProjectConfiguration config, string projectDirectory)
     {
+        // сохраняется только исходная форма: системная диагностика (§7.4)
+        // генерируется при каждой загрузке и в файлы не пишется
+        var sourceConfig = new ProjectConfiguration
+        {
+            Name = config.Name,
+            Version = config.Version,
+            Channels = config.Channels,
+            Devices = config.Devices.Where(d => !DiagnosticsGenerator.IsSystemDevice(d)).ToArray(),
+            Tags = config.Tags.Where(t => !DiagnosticsGenerator.IsSystemTag(t)).ToArray()
+        };
+
         // последняя линия обороны: даже если вызвали в обход редактора,
         // невалидная конфигурация не будет записана
-        var errors = ProjectValidator.Validate(config);
+        var errors = ProjectValidator.Validate(sourceConfig);
         if (errors.Count > 0)
             throw new ProjectConfigurationException(errors);
 
@@ -25,8 +36,8 @@ public static class ProjectWriter
             new ProjectFile
             {
                 FormatVersion = ProjectLoader.CurrentFormatVersion,
-                Name = config.Name,
-                Version = config.Version
+                Name = sourceConfig.Name,
+                Version = sourceConfig.Version
             },
             ProjectJsonContext.Default.ProjectFile);
 
@@ -34,8 +45,8 @@ public static class ProjectWriter
             new DevicesFile
             {
                 FormatVersion = ProjectLoader.CurrentFormatVersion,
-                Channels = config.Channels,
-                Devices = config.Devices
+                Channels = sourceConfig.Channels,
+                Devices = sourceConfig.Devices
             },
             ProjectJsonContext.Default.DevicesFile);
 
@@ -43,7 +54,7 @@ public static class ProjectWriter
             new TagsFile
             {
                 FormatVersion = ProjectLoader.CurrentFormatVersion,
-                Tags = config.Tags
+                Tags = sourceConfig.Tags
             },
             ProjectJsonContext.Default.TagsFile);
     }

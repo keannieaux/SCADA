@@ -11,6 +11,8 @@ public interface IDeviceDriver
     // Драйвер сам выбирает: сетевой запрос (Modbus) или буфер подписки (OPC UA).
     // true  — буфер содержит свежие значения, движок запишет их в таблицу;
     // false — новых данных нет (internal-теги, подписка без обновлений).
-    ValueTask<bool> PollAsync(Span<TagValue> results, CancellationToken ct);
+    // Значения — СЫРЫЕ: масштабирование (ScaleFactor/ScaleOffset) применяет
+    // движок централизованно; в TagTable всегда инженерные единицы.
+    ValueTask<bool> PollAsync(Memory<TagValue> results, CancellationToken ct);
     Task DisconnectAsync();
 }

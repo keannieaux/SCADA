@@ -21,21 +21,21 @@ public class ExpressionBenchmarks
         table.Write(new TagId(1), new TagValue(1.0, 1000, Quality.Good));
         _context = new EvaluationContext { Tags = table };
 
-        // эталон: IsGood(Tag0) && Tag0 > 80 — 11 инструкций,
+        // эталон: IsGood(Tag0) && Tag0 > 80,
         // типичное выражение динамизации мнемосхемы
         _expr = new Expression
         {
             Constants = [0.0, 80.0, 0.0],
             Code =
             [
-                (byte)OpCode.LoadConst, 0,
-                (byte)OpCode.CallBuiltin, BuiltinFunctions.IsGood, 1,
-                (byte)OpCode.JumpIfFalse, 16, 0,
-                (byte)OpCode.LoadTag, 0,
-                (byte)OpCode.LoadConst, 1,
+                (byte)OpCode.LoadConst, ..BitConverter.GetBytes(0),
+                (byte)OpCode.CallBuiltin, ..BitConverter.GetBytes(BuiltinFunctions.IsGood), 1,
+                (byte)OpCode.JumpIfFalse, ..BitConverter.GetBytes(32),
+                (byte)OpCode.LoadTag, ..BitConverter.GetBytes(0),
+                (byte)OpCode.LoadConst, ..BitConverter.GetBytes(1),
                 (byte)OpCode.Greater,
-                (byte)OpCode.Jump, 18, 0,
-                (byte)OpCode.LoadConst, 2,
+                (byte)OpCode.Jump, ..BitConverter.GetBytes(37),
+                (byte)OpCode.LoadConst, ..BitConverter.GetBytes(2),
                 (byte)OpCode.Return
             ]
         };

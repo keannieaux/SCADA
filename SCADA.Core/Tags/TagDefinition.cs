@@ -1,31 +1,34 @@
-﻿using SCADA.Core.Devices;
+using SCADA.Core.Devices;
 
 namespace SCADA.Core.Tags;
 
 public class TagDefinition
 {
-    public required TagId Id { get; init; }
-    public required string Name { get; init; }
-    public string Description { get; init; } = "";
-    public required TagDataType DataType { get; init; }
+    public required TagId Id { get; set; }
+    public required string Name { get; set; }
+    public string Description { get; set; } = "";
+    public required TagDataType DataType { get; set; }
 
-    public required DeviceId DeviceId { get; init; }
+    public required DeviceId DeviceId { get; set; }
 
-    public string Address { get; init; } = "";
+    public string Address { get; set; } = "";
 
-    public double ScaleFactor { get; init; } = 1.0;
-    public double ScaleOffset { get; init; } = 0.0;
+    public double ScaleFactor { get; set; } = 1.0;
+    public double ScaleOffset { get; set; } = 0.0;
 
-    public double? MinValue { get; init; }
-    public double? MaxValue { get; init; }
-    public double? Deadband { get; init; }
+    public double? MinValue { get; set; }
+    public double? MaxValue { get; set; }
+    public double? Deadband { get; set; }
 
-    public string Units { get; init; } = "";
-    public bool IsWritable { get; init; }
+    public string Units { get; set; } = "";
+    public bool IsWritable { get; set; }
 
-    public double? InitValue { get; init; }
-    public bool IsPersistent { get; init; }
+    public double? InitValue { get; set; }
+    public bool IsPersistent { get; set; }
 
-     public TagLoggingConfiguration? Logging { get; init; }
+    /// <summary>Происхождение тега: из исходного проекта или сгенерирован системой.</summary>
+    public TagOrigin Origin { get; set; } = TagOrigin.Process;
+
+     public TagLoggingConfiguration? Logging { get; set; }
 
 }

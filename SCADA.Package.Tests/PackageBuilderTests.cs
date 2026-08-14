@@ -62,8 +62,8 @@ public class PackageBuilderTests : IDisposable
         Assert.Equal("BoilerRoom", config.Name);
         Assert.Equal("3.1", config.Version);
 
-        // пакет несёт и сгенерированную диагностику канала: 7 тегов на канал
-        Assert.Equal(2 + 7, config.Tags.Count);
+        // пакет несёт сгенерированную диагностику канала (7 тегов) и архива (§7.5)
+        Assert.Equal(2 + 7 + SCADA.Runtime.Historian.ArchiveDiagnostics.MetricDefinitions.Count, config.Tags.Count);
         var temp = config.Tags[0];
         Assert.Equal("Boiler1.Temp", temp.Name);
         Assert.Equal(TagDataType.Analog, temp.DataType);
@@ -79,7 +79,7 @@ public class PackageBuilderTests : IDisposable
 
         var channel = Assert.Single(config.Channels);
         Assert.Equal("192.168.0.10:502", channel.Configuration);
-        Assert.Equal(2, config.Devices.Count); // PLC1 + диагностическое "@Line1"
+        Assert.Equal(3, config.Devices.Count); // PLC1 + "@Line1" + "@Archive"
         Assert.Equal("simulator", config.Devices[0].DriverName);
     }
 

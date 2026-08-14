@@ -168,20 +168,18 @@ public class PollingEngineTests
         await engine.StartAsync();
         try
         {
-            await Task.Delay(150);
-            Assert.Equal(Quality.Good, table.Read(new TagId(0)).Quality);
+            await WaitForAsync(() => table.Read(new TagId(0)).Quality == Quality.Good, timeoutMs: 2000);
 
             gate.IsUp = false; // обрыв
-            await Task.Delay(200);
+            await WaitForAsync(() => table.Read(new TagId(0)).Quality == Quality.Bad, timeoutMs: 2000);
             var duringOutage = table.Read(new TagId(0));
-            Assert.Equal(Quality.Bad, duringOutage.Quality);
             Assert.Equal(7.5, duringOutage.Value); // значение не зануляется (§4.2)
 
             // соседнее устройство на том же канале продолжает опрашиваться
-            Assert.Equal(Quality.Good, table.Read(new TagId(1)).Quality);
+            await WaitForAsync(() => table.Read(new TagId(1)).Quality == Quality.Good, timeoutMs: 2000);
 
             gate.IsUp = true; // восстановление — первая попытка reconnect через ~1с
-            await Task.Delay(2000);
+            await WaitForAsync(() => table.Read(new TagId(0)).Quality == Quality.Good, timeoutMs: 5000);
             Assert.Equal(Quality.Good, table.Read(new TagId(0)).Quality);
         }
         finally
@@ -197,16 +195,28 @@ public class PollingEngineTests
         DriverFactory.Register("flaky", () => new FlakyDriver(gate));
 
         var table = new TagTable.TagTable(capacity: 10);
-        var engine = new PollingEngine(CreateFlakyConfig(), table, TimeSpan.FromMilliseconds(20));
+
+        // Быстрый backoff: с боевым (1с → 30с) к моменту восстановления связи
+        // накапливается 3–4 отказа, и следующая попытка отстоит на 8–16 секунд.
+        // Тест либо ждал бы полминуты, либо падал под нагрузкой — что и делал.
+        var backoff = new ReconnectBackoff
+        {
+            BaseDelay = TimeSpan.FromMilliseconds(20),
+            MaxDelay = TimeSpan.FromMilliseconds(100)
+        };
+
+        var engine = new PollingEngine(CreateFlakyConfig(), table,
+            TimeSpan.FromMilliseconds(20), backoff);
         await engine.StartAsync();
         try
         {
-            await Task.Delay(300);
-            Assert.Equal(Quality.Bad, table.Read(new TagId(0)).Quality);   // flaky — Bad
-            Assert.Equal(Quality.Good, table.Read(new TagId(1)).Quality);  // канал жив
+            // ждём, пока движок действительно попытается подключиться и пометит тег Bad
+            await WaitForAsync(() => table.Read(new TagId(0)).Quality == Quality.Bad, timeoutMs: 5000);
+            // соседнее устройство на том же канале должно быть живо
+            await WaitForAsync(() => table.Read(new TagId(1)).Quality == Quality.Good, timeoutMs: 5000);
 
             gate.IsUp = true;
-            await Task.Delay(2000);
+            await WaitForAsync(() => table.Read(new TagId(0)).Quality == Quality.Good, timeoutMs: 5000);
             Assert.Equal(Quality.Good, table.Read(new TagId(0)).Quality);  // подключился сам
         }
         finally
@@ -226,28 +236,37 @@ public class PollingEngineTests
         // после AppendDiagnostics: id 2=@C.Connected, 4=@C.RequestsOk,
         // 5=@C.RequestsFailed, 6=@C.ReconnectCount (порядок метрик генератора)
 
-        var table = new TagTable.TagTable(capacity: 16);
+        var table = new TagTable.TagTable(capacity: config.Tags.Count);
         var engine = new PollingEngine(config, table, TimeSpan.FromMilliseconds(20));
         await engine.StartAsync();
         try
         {
-            await Task.Delay(1300); // первая порция диагностики пишется через ~1с
-            Assert.Equal(1.0, table.Read(new TagId(2)).Value);   // Connected
+            await WaitForAsync(() => table.Read(new TagId(2)).Value == 1.0, timeoutMs: 3000);
             Assert.True(table.Read(new TagId(4)).Value > 0);     // RequestsOk
 
             gate.IsUp = false; // обрыв
-            await Task.Delay(1300);
-            Assert.Equal(0.0, table.Read(new TagId(2)).Value);
+            await WaitForAsync(() => table.Read(new TagId(2)).Value == 0.0, timeoutMs: 3000);
             Assert.True(table.Read(new TagId(5)).Value > 0);     // RequestsFailed
 
             gate.IsUp = true; // восстановление: backoff ~1с + flush
-            await Task.Delay(2500);
-            Assert.Equal(1.0, table.Read(new TagId(2)).Value);
+            await WaitForAsync(() => table.Read(new TagId(2)).Value == 1.0, timeoutMs: 5000);
             Assert.True(table.Read(new TagId(6)).Value >= 1);    // ReconnectCount
         }
         finally
         {
             await engine.StopAsync();
+        }
+    }
+
+    private static async Task WaitForAsync(Func<bool> condition, int timeoutMs, int intervalMs = 50)
+    {
+        var deadline = DateTimeOffset.UtcNow.AddMilliseconds(timeoutMs);
+        while (!condition())
+        {
+            if (DateTimeOffset.UtcNow > deadline)
+                throw new TimeoutException("Условие не выполнилось в отведённый таймаут");
+
+            await Task.Delay(intervalMs);
         }
     }
 }

@@ -24,7 +24,8 @@ public class TagsSectionTests
                 ScaleOffset = -40.0,
                 MinValue = 0,
                 MaxValue = 150,
-                Deadband = 0.5,
+                IsArchived = true,
+                Precision = 3,
                 Units = "°C",
                 IsWritable = true,
                 InitValue = 20.0,
@@ -66,7 +67,8 @@ public class TagsSectionTests
         Assert.Equal(-40.0, full.ScaleOffset);
         Assert.Equal(0, full.MinValue);
         Assert.Equal(150, full.MaxValue);
-        Assert.Equal(0.5, full.Deadband);
+        Assert.True(full.IsArchived);
+        Assert.Equal(3, full.Precision);
         Assert.Equal("°C", full.Units);
         Assert.True(full.IsWritable);
         Assert.Equal(20.0, full.InitValue);

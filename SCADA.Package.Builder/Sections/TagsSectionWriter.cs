@@ -42,13 +42,15 @@ public static class TagsSectionWriter
             record.Write(tag.ScaleOffset);
             WriteNullable(record, tag.MinValue);
             WriteNullable(record, tag.MaxValue);
-            WriteNullable(record, tag.Deadband);
             record.Write(tag.Units);
             record.Write(tag.IsWritable);
             WriteNullable(record, tag.InitValue);
             record.Write(tag.IsPersistent);
             WriteLogging(record, tag.Logging);
             record.Write((byte)tag.Origin);
+            // M4: поля архивирования — в хвосте записи
+            record.Write(tag.IsArchived);
+            WriteNullableInt(record, tag.Precision);
             record.Flush();
         }
 

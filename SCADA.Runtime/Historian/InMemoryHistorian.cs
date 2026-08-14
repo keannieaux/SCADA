@@ -3,11 +3,13 @@ using SCADA.Runtime.TagTable;
 
 namespace SCADA.Runtime.Historian;
 
-public sealed class InMemoryHistorian : IHistorian
+/// <summary>
+/// Кольцевой буфер последних значений тегов.
+/// Используется как realtime-кольцо внутри IHistorian (docs/archive-format.md §13.4):
+/// не хранит год, не пишет на диск, даёт последние N точек без await.
+/// </summary>
+public sealed class InMemoryHistorian
 {
-    // ВНИМАНИЕ: это заглушка для разработки трендов (§16.4), а не хранилище.
-    // Час данных всех тегов в RAM невозможен физически (20k × 3600 × 24 Б ≈ 1.7 ГБ) —
-    // боевой архив M4 дисковый, со сжатием и агрегатами (§8).
     // Спасает ленивое выделение: буферы создаются только для пишущихся тегов.
     private readonly int _capacityPerTag;
     private readonly RingBuffer?[] _buffers;
@@ -99,6 +101,23 @@ public sealed class InMemoryHistorian : IHistorian
             return buffer.CopyRange(fromUtc, toUtc, destination);
     }
 
+    /// <summary>Последние N значений из кольца в хронологическом порядке.</summary>
+    public int ReadRecent(TagId id, Span<TagValue> destination)
+    {
+        var buffer = _buffers[id.Value];
+        if (buffer is null) return 0;
+        lock (buffer)
+            return buffer.CopyRange(0, long.MaxValue, destination);
+    }
+
+    /// <summary>Последнее значение не позже atMs, или null.</summary>
+    public TagValue? ReadAt(TagId id, long atMs)
+    {
+        var buffer = _buffers[id.Value];
+        if (buffer is null) return null;
+        lock (buffer)
+            return buffer.ReadAt(atMs);
+    }
 
     private sealed class RingBuffer
     {
@@ -143,6 +162,18 @@ public sealed class InMemoryHistorian : IHistorian
                 destination[written++] = item;
             }
             return written;
+        }
+
+        /// <summary>Последнее значение не позже atMs, или null.</summary>
+        public TagValue? ReadAt(long atMs)
+        {
+            for (int i = _count - 1; i >= 0; i--)
+            {
+                var item = Oldest(i);
+                if (item.TimeStampUtc <= atMs)
+                    return item;
+            }
+            return null;
         }
     }
 }

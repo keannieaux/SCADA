@@ -21,6 +21,13 @@ public static class DiagnosticsGenerator
     /// <summary>Префикс системных имён. Зарезервирован: инженеру запрещён валидатором.</summary>
     public const char SystemPrefix = '@';
 
+    /// <summary>
+    /// Псевдоканал архива. Архив не связан ни с одним каналом связи, но
+    /// DeviceDefinition требует ChannelId; отрицательное значение не может
+    /// совпасть с настоящим каналом из конфигурации.
+    /// </summary>
+    public static readonly ChannelId ArchiveChannelId = new(-1);
+
     // состав метрик канала — фиксированный и append-only, от порядка зависят Id
     public const string ConnectedSuffix = "Connected";               // 0/1
     public const string LastOkTimeSuffix = "LastOkTime";             // unix ms последнего успеха
@@ -53,9 +60,6 @@ public static class DiagnosticsGenerator
     /// </summary>
     public static void AppendDiagnostics(ProjectConfiguration config)
     {
-        if (config.Channels.Count == 0)
-            return;
-
         int nextDeviceId = config.Devices.Count == 0 ? 0 : config.Devices.Max(d => d.Id.Value) + 1;
         int nextTagId = config.Tags.Count == 0 ? 0 : config.Tags.Max(t => t.Id.Value) + 1;
 
@@ -89,7 +93,44 @@ public static class DiagnosticsGenerator
             }
         }
 
+        // Строго после каналов: добавление новой подсистемы не должно сдвигать
+        // уже назначенные Id — от них зависит раннее связывание (ТЗ §11.6).
+        AppendArchiveDiagnostics(devices, tags, ref nextDeviceId, ref nextTagId);
+
         config.Devices = devices;
         config.Tags = tags;
+    }
+
+    /// <summary>
+    /// Диагностика подсистемы архивирования (ТЗ §7.5). Добавляется всегда,
+    /// в том числе когда каналов в проекте нет: архив работает независимо
+    /// от наличия связи с устройствами, и его состояние надо видеть.
+    /// </summary>
+    private static void AppendArchiveDiagnostics(
+        List<DeviceDefinition> devices, List<TagDefinition> tags,
+        ref int nextDeviceId, ref int nextTagId)
+    {
+        var device = new DeviceDefinition
+        {
+            Id = new DeviceId(nextDeviceId++),
+            Name = Historian.ArchiveDiagnostics.DeviceName,
+            Description = "Диагностика архива",
+            DriverName = "internal",
+            ChannelId = ArchiveChannelId
+        };
+        devices.Add(device);
+
+        foreach (var (suffix, dataType) in Historian.ArchiveDiagnostics.MetricDefinitions)
+        {
+            tags.Add(new TagDefinition
+            {
+                Id = new TagId(nextTagId++),
+                Name = Historian.ArchiveDiagnostics.TagName(suffix),
+                DataType = dataType,
+                DeviceId = device.Id,
+                Origin = TagOrigin.Diagnostics,
+                InitValue = 0
+            });
+        }
     }
 }

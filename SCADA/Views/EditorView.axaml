@@ -2,6 +2,7 @@
 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 xmlns:vm="using:SCADA.ViewModels"
 xmlns:ic="using:FluentIcons.Avalonia"
+xmlns:views="using:SCADA.Views"
 x:Class="SCADA.Views.EditorView"
 x:DataType="vm:EditorViewModel">
 
@@ -27,13 +28,79 @@ x:DataType="vm:EditorViewModel">
             <Setter Property="CornerRadius" Value="3"/>
             <Setter Property="FontSize" Value="13"/>
         </Style>
+        <Style Selector="Button.tool-btn">
+            <Setter Property="Width" Value="30"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Foreground" Value="{DynamicResource Text2Brush}"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Button.tool-btn.on">
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+        </Style>
+        <Style Selector="Border.tool-sep">
+            <Setter Property="Width" Value="1"/>
+            <Setter Property="Height" Value="20"/>
+            <Setter Property="Background" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="Margin" Value="4,0"/>
+        </Style>
+        <Style Selector="Button.run-btn">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="CornerRadius" Value="7"/>
+            <Setter Property="Padding" Value="16,7"/>
+        </Style>
+        <Style Selector="Button.panel-tab">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0,0,0,2"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="CornerRadius" Value="0"/>
+            <Setter Property="Padding" Value="0,0,0,8"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="{DynamicResource Text2Brush}"/>
+        </Style>
+        <Style Selector="Button.panel-tab.active">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.sec-header">
+            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="{DynamicResource Text2Brush}"/>
+            <Setter Property="Margin" Value="0,14,0,8"/>
+        </Style>
+        <Style Selector="TextBlock.prop-label">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Foreground" Value="{DynamicResource Text2Brush}"/>
+        </Style>
+        <Style Selector="TextBox.prop-input">
+            <Setter Property="Background" Value="{DynamicResource Bg2Brush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+            <Setter Property="CornerRadius" Value="3"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Padding" Value="6,4"/>
+        </Style>
+        <Style Selector="ComboBox.prop-input">
+            <Setter Property="Background" Value="{DynamicResource Bg2Brush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+            <Setter Property="CornerRadius" Value="3"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Padding" Value="6,4"/>
+        </Style>
     </UserControl.Styles>
 
-    <Grid RowDefinitions="Auto,Auto,*,Auto" Background="{DynamicResource Bg0Brush}">
+    <Grid RowDefinitions="Auto,Auto,*,Auto,Auto" Background="{DynamicResource Bg0Brush}">
 
         <Border Grid.Row="0" Height="40" Background="{DynamicResource Bg1Brush}"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-            <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto" Margin="12,0">
+            <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto" Margin="12,0">
 
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8"
                             VerticalAlignment="Center" Margin="0,0,16,0">
@@ -73,35 +140,98 @@ x:DataType="vm:EditorViewModel">
                     <TextBlock Classes="body" FontSize="12" VerticalAlignment="Center" Foreground="{DynamicResource AccentBrush}" Text="Инженегр"/>
                 </StackPanel>
 
-                <ListBox Grid.Column="5" Classes="segmented" VerticalAlignment="Center"
-                        ItemsSource="{Binding Modes}" SelectedItem="{Binding SelectedMode}">
-                    <ListBox.Styles>
-                        <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
-                            <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
-                        </Style>
-                        <Style Selector="ListBoxItem:selected TextBlock">
-                            <Setter Property="Foreground" Value="{DynamicResource AccentInkBrush}"/>
-                            <Setter Property="FontWeight" Value="Bold"/>
-                        </Style>
-                    </ListBox.Styles>
-                    <ListBox.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <StackPanel Orientation="Horizontal"/>
-                        </ItemsPanelTemplate>
-                    </ListBox.ItemsPanel>
-                    <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <TextBlock Text="{Binding}" Classes="body" FontSize="10.5" FontWeight="Bold"/>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
-
             </Grid>
         </Border>
 
         <Border Grid.Row="1" Height="40" Background="{DynamicResource Bg1Brush}"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-            <TextBlock Text="Тулбар" VerticalAlignment="Center" Margin="12,0" Classes="body"/>
+            <Grid ColumnDefinitions="*,Auto" Margin="10,0">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
+
+                    <Button Classes="tool-btn" ToolTip.Tip="Сохранить (Ctrl+S)">
+                        <ic:FluentIcon Icon="Save" IconVariant="Filled" FontSize="15"/>
+                    </Button>
+                    <Button Classes="tool-btn" ToolTip.Tip="Отменить (Ctrl+Z)">
+                        <ic:FluentIcon Icon="ArrowUndo" IconVariant="Filled" FontSize="15"/>
+                    </Button>
+                    <Button Classes="tool-btn" ToolTip.Tip="Повторить (Ctrl+Y)">
+                        <ic:FluentIcon Icon="ArrowRedo" IconVariant="Filled" FontSize="15"/>
+                    </Button>
+
+                    <Border Classes="tool-sep"/>
+
+                    <Button Classes="tool-btn on" ToolTip.Tip="Выбор (V)">
+                        <ic:FluentIcon Icon="Cursor" IconVariant="Filled" FontSize="15"/>
+                    </Button>
+                    <Button Classes="tool-btn" ToolTip.Tip="Рука (H)">
+                        <ic:FluentIcon Icon="HandRight" IconVariant="Filled" FontSize="15"/>
+                    </Button>
+                    <Button Classes="tool-btn" ToolTip.Tip="Соединитель труб">
+                        <ic:FluentIcon Icon="Connector" IconVariant="Filled" FontSize="15"/>
+                    </Button>
+
+                    <Border Classes="tool-sep"/>
+
+                    <Button Classes="tool-btn" ToolTip.Tip="Уменьшить">
+                        <ic:FluentIcon Icon="ZoomOut" IconVariant="Filled" FontSize="15"/>
+                    </Button>
+                    <TextBlock Classes="body" Text="100%" FontSize="11.5" Foreground="{DynamicResource Text2Brush}"
+                            VerticalAlignment="Center" Width="40" TextAlignment="Center"/>
+                    <Button Classes="tool-btn" ToolTip.Tip="Увеличить">
+                        <ic:FluentIcon Icon="ZoomIn" IconVariant="Filled" FontSize="15"/>
+                    </Button>
+                    <Button Classes="tool-btn" ToolTip.Tip="По размеру экрана">
+                        <ic:FluentIcon Icon="PageFit" IconVariant="Filled" FontSize="15"/>
+                    </Button>
+
+                    <Border Classes="tool-sep"/>
+
+                    <Button Classes="tool-btn on" ToolTip.Tip="Сетка (G)">
+                        <ic:FluentIcon Icon="Grid" IconVariant="Filled" FontSize="15"/>
+                    </Button>
+                    <Button Classes="tool-btn on" ToolTip.Tip="Привязка к сетке">
+                        <ic:FluentIcon Icon="Ruler" IconVariant="Filled" FontSize="15"/>
+                    </Button>
+                    <Button Classes="tool-btn" ToolTip.Tip="Направляющие">
+                        <ic:FluentIcon Icon="Target" IconVariant="Filled" FontSize="15"/>
+                    </Button>
+
+                    <Border Classes="tool-sep"/>
+
+                    <Button Classes="tool-btn" ToolTip.Tip="Выровнять по левому краю">
+                        <ic:FluentIcon Icon="AlignLeft" IconVariant="Filled" FontSize="15"/>
+                    </Button>
+                    <Button Classes="tool-btn" ToolTip.Tip="Центрировать по горизонтали">
+                        <ic:FluentIcon Icon="AlignCenterHorizontal" IconVariant="Filled" FontSize="15"/>
+                    </Button>
+                    <Button Classes="tool-btn" ToolTip.Tip="Распределить">
+                        <ic:FluentIcon Icon="AlignSpaceBetweenHorizontal" IconVariant="Filled" FontSize="15"/>
+                    </Button>
+
+                    <Border Classes="tool-sep"/>
+
+                    <Button Classes="tool-btn" ToolTip.Tip="Сгруппировать (Ctrl+G)">
+                        <ic:FluentIcon Icon="Group" IconVariant="Filled" FontSize="15"/>
+                    </Button>
+                    <Button Classes="tool-btn" ToolTip.Tip="На передний план">
+                        <ic:FluentIcon Icon="PositionToFront" IconVariant="Filled" FontSize="15"/>
+                    </Button>
+
+                </StackPanel>
+
+                <Button Grid.Column="1" Classes="run-btn" VerticalAlignment="Center"
+                        Command="{Binding ToggleRunCommand}">
+                    <StackPanel Orientation="Horizontal" Spacing="7">
+                        <ic:FluentIcon Icon="Play" IconVariant="Filled" FontSize="12" Foreground="{DynamicResource AccentInkBrush}"/>
+                        <TextBlock Text="Запустить исполнение" Classes="body" FontSize="12" FontWeight="Bold"
+                                    Foreground="{DynamicResource AccentInkBrush}"
+                                    IsVisible="{Binding !IsRunning}"/>
+                        <TextBlock Text="Остановить" Classes="body" FontSize="12" FontWeight="Bold"
+                                    Foreground="{DynamicResource AccentInkBrush}"
+                                    IsVisible="{Binding IsRunning}"/>
+                    </StackPanel>
+                </Button>
+            </Grid>
         </Border>
 
         <Grid Grid.Row="2" ColumnDefinitions="260,*,300">
@@ -116,14 +246,57 @@ x:DataType="vm:EditorViewModel">
 
             <Border Grid.Column="2" Background="{DynamicResource Bg1Brush}"
                     BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,0,0,0">
-                <TextBlock Text="Свойства / Слои" Margin="12" Classes="body"/>
+                <DockPanel>
+
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="16" Margin="14,10,14,0">
+                        <Button Classes="panel-tab active" Content="Свойства"/>
+                        <Button Classes="panel-tab" Content="Слои"/>
+                        <Button Classes="panel-tab" Content="Анимация"/>
+                    </StackPanel>
+
+                    <Border DockPanel.Dock="Top" Height="1" Background="{DynamicResource BorderBrush}"/>
+
+                    <ScrollViewer Padding="14,12">
+
+                    </ScrollViewer>
+                </DockPanel>
             </Border>
         </Grid>
 
-        <Border Grid.Row="3" Height="26" Background="{DynamicResource Bg1Brush}"
+        <Border Grid.Row="3" Height="220" Background="{DynamicResource Bg1Brush}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+            <Grid RowDefinitions="Auto,*" Margin="14,10,14,10">
+                <TextBlock Grid.Row="0" Classes="sec-header" Margin="0,0,0,6" Text="Устройства и адреса тегов"/>
+                <StackPanel Grid.Row="1">
+                    <Grid ColumnDefinitions="*,160,120" Margin="0,0,0,6">
+                        <TextBlock Grid.Column="0" Classes="prop-label" FontWeight="Bold" Text="Тег / Устройство"/>
+                        <TextBlock Grid.Column="1" Classes="prop-label" FontWeight="Bold" Text="Адрес"/>
+                        <TextBlock Grid.Column="2" Classes="prop-label" FontWeight="Bold" Text="Протокол"/>
+                    </Grid>
+                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="0,6">
+                        <Grid ColumnDefinitions="*,160,120">
+                            <TextBlock Grid.Column="0" Classes="body" FontSize="12" Text="PT-101 — Насосная станция"/>
+                            <TextBlock Grid.Column="1" Classes="mono" FontSize="12" Text="40001 (holding)"/>
+                            <TextBlock Grid.Column="2" Classes="body" FontSize="12" Foreground="{DynamicResource Text2Brush}" Text="Modbus TCP"/>
+                        </Grid>
+                    </Border>
+                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="0,6">
+                        <Grid ColumnDefinitions="*,160,120">
+                            <TextBlock Grid.Column="0" Classes="body" FontSize="12" Text="LT-201 — РЧВ-1"/>
+                            <TextBlock Grid.Column="1" Classes="mono" FontSize="12" Text="30012 (input)"/>
+                            <TextBlock Grid.Column="2" Classes="body" FontSize="12" Foreground="{DynamicResource Text2Brush}" Text="Modbus TCP"/>
+                        </Grid>
+                    </Border>
+                </StackPanel>
+
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="4" Height="26" Background="{DynamicResource Bg1Brush}"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
             <TextBlock Text="Статус-бар" VerticalAlignment="Center" Margin="12,0" Classes="body"/>
         </Border>
+
 
     </Grid>
 

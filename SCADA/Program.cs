@@ -32,6 +32,8 @@ sealed class Program
         builder.Services.AddSingleton(pollingEngine);
         builder.Services.AddSingleton<LoginViewModel>();
         builder.Services.AddSingleton<EditorViewModel>();
+        builder.Services.AddTransient<RuntimeViewModel>();
+        builder.Services.AddTransient<RuntimeView>();
         builder.Services.AddSingleton<MainViewModel>();
         builder.Services.AddSingleton<MainWindow>();
         builder.Services.AddSingleton(config);

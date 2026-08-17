@@ -1,0 +1,30 @@
+<Window xmlns="https://github.com/avaloniaui"
+xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+xmlns:vm="using:SCADA.ViewModels"
+xmlns:views="using:SCADA.Views"
+x:Class="SCADA.Views.RuntimeView"
+x:DataType="vm:RuntimeViewModel"
+Title="SCADA - Исполнение"
+Width="1100" Height="700"
+Background="{DynamicResource Bg0Brush}">
+
+    <Grid RowDefinitions="*,Auto">
+
+    <Border Grid.Row="0" Background="{DynamicResource Bg0Brush}">
+        <ContentControl Content="{Binding SchemesViewModel.Canvas}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+    </Border>
+
+    <Border Grid.Row="1" Height="220" Background="{DynamicResource Bg1Brush}"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+        <DockPanel>
+            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="18" Margin="14,10,14,0">
+                <TextBlock Classes="body" FontSize="12" Foreground="{DynamicResource AccentBrush}" Text="Теги рантайм"/>
+                <TextBlock Classes="body" FontSize="12" Foreground="{DynamicResource Text2Brush}" Text="Вывод"/>
+                <TextBlock Classes="body" FontSize="12" Foreground="{DynamicResource Text2Brush}" Text="Аварии"/>
+            </StackPanel>
+            <Border DockPanel.Dock="Top" Height="1" Background="{DynamicResource BorderBrush}" Margin="0,8,0,0"/>
+            <views:TagsView DataContext="{Binding TagsViewModel}" Margin="14,10"/>
+        </DockPanel>
+    </Border>
+    </Grid>
+</Window>

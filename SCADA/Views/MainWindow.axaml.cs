@@ -5,8 +5,6 @@ namespace SCADA.Views;
 
 public partial class MainWindow : Window
 {
-    // Используется дизайнером Avalonia и XAML-загрузчиком
-    public MainWindow() : this(new MainViewModel()) { }
     public MainWindow(MainViewModel viewModel)
     {
         InitializeComponent();

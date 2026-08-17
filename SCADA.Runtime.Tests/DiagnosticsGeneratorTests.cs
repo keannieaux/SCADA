@@ -2,6 +2,7 @@ using SCADA.Core.Channels;
 using SCADA.Core.Devices;
 using SCADA.Core.Tags;
 using SCADA.Runtime.Configuration;
+using SCADA.Runtime.Historian;
 
 namespace SCADA.Runtime.Tests;
 
@@ -38,8 +39,9 @@ public class DiagnosticsGeneratorTests : IDisposable
         var config = CreateConfig();
         DiagnosticsGenerator.AppendDiagnostics(config);
 
-        Assert.Equal(4, config.Devices.Count);      // 2 исходных + 2 диагностических
-        Assert.Equal(2 + 2 * 7, config.Tags.Count); // по 7 метрик на канал
+        // 2 исходных + 2 диагностических канала + 1 архив (ТЗ §7.5)
+        Assert.Equal(5, config.Devices.Count);
+        Assert.Equal(2 + 2 * 7 + ArchiveDiagnostics.MetricDefinitions.Count, config.Tags.Count);
 
         var diagDevice = config.Devices[2];
         Assert.Equal("@Line1", diagDevice.Name);

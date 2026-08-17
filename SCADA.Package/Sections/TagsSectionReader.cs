@@ -42,7 +42,6 @@ public static class TagsSectionReader
             ScaleOffset = reader.ReadDouble(),
             MinValue = ReadNullable(reader),
             MaxValue = ReadNullable(reader),
-            Deadband = ReadNullable(reader),
             Units = reader.ReadString(),
             IsWritable = reader.ReadBoolean(),
             InitValue = ReadNullable(reader),
@@ -50,9 +49,14 @@ public static class TagsSectionReader
             Logging = ReadLogging(reader)
         };
 
-        // Origin — поле более поздней раскладки; читаем, только если оно есть в записи
+        // поля более поздних раскладок читаем, только если они есть в записи
         if (stream.Position < recordEnd)
             tag.Origin = (TagOrigin)reader.ReadByte();
+        if (stream.Position < recordEnd)
+        {
+            tag.IsArchived = reader.ReadBoolean();
+            tag.Precision = ReadNullableInt(reader);
+        }
 
         // хвост записи (поля более нового формата) пропускаем
         stream.Position = recordEnd;

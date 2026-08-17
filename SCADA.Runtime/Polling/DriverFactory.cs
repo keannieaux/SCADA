@@ -1,22 +1,21 @@
 using System.Collections.Concurrent;
 using SCADA.Core.Devices;
 using SCADA.Drivers.Abstractions;
-using SCADA.Drivers.Simulator;
 
 namespace SCADA.Runtime.Polling;
 
 /// <summary>
 /// Реестр драйверов по имени протокола (ТЗ §7.2: новый протокол = новый проект
-/// + регистрация, правок в остальном коде ноль). Встроенные драйверы
-/// (simulator, internal) зарегистрированы по умолчанию; внешние (modbus-tcp,
-/// будущие OPC UA/MQTT) регистрирует composition root приложения:
+/// + регистрация, правок в остальном коде ноль). Встроенный драйвер
+/// internal зарегистрирован по умолчанию; внешние драйверы (modbus-tcp,
+/// будущие OPC UA/MQTT) и dev-драйвер simulator регистрирует composition root
+/// приложения:
 /// <code>DriverFactory.Register("modbus-tcp", () => new ModbusTcpDriver());</code>
 /// </summary>
 public static class DriverFactory
 {
     private static readonly ConcurrentDictionary<string, Func<IDeviceDriver>> Factories = new()
     {
-        ["simulator"] = () => new SimulatorDriver(),
         ["internal"] = () => new InternalDriver()
     };
 

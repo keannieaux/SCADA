@@ -50,3 +50,6 @@ secrets.json
 # OS
 .DS_Store
 Thumbs.db
+
+# Данные рантайма демо-проекта: архив создаётся при запуске
+SCADA.Server/demo/*/archive/

@@ -18,7 +18,17 @@ public class TagDefinition
 
     public double? MinValue { get; set; }
     public double? MaxValue { get; set; }
-    public double? Deadband { get; set; }
+
+    /// <summary>Писать тег в архив (M4). По умолчанию не пишется —
+    /// логируются 10–30 % тегов (ТЗ §1.1, §8.3).</summary>
+    public bool IsArchived { get; set; }
+
+    /// <summary>
+    /// Квантование значения до N значащих разрядов перед записью в архив
+    /// (docs/archive-format.md §7.3). С потерями — только по явному указанию.
+    /// null — без квантования.
+    /// </summary>
+    public int? Precision { get; set; }
 
     public string Units { get; set; } = "";
     public bool IsWritable { get; set; }

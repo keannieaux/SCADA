@@ -1,4 +1,5 @@
 using SCADA.Runtime.Configuration;
+using SCADA.Runtime.Historian;
 
 namespace SCADA.Runtime.Tests;
 
@@ -46,9 +47,10 @@ public class ProjectLoaderTests : IDisposable
         Assert.Equal("TestProject", config.Name);
         Assert.Equal("1.0", config.Version);
 
-        // загрузчик добавляет диагностику канала (§7.4): 1 устройство + 7 тегов
-        Assert.Equal(2 + 7, config.Tags.Count);
-        Assert.Equal(2, config.Devices.Count);
+        // загрузчик добавляет диагностику канала (§7.4): 1 устройство + 7 тегов,
+        // и диагностику архива (§7.5): 1 устройство + свой набор метрик
+        Assert.Equal(2 + 7 + ArchiveDiagnostics.MetricDefinitions.Count, config.Tags.Count);
+        Assert.Equal(3, config.Devices.Count);
         Assert.Single(config.Channels);
         Assert.Equal("@Ch0", config.Devices[1].Name);
         Assert.Equal("@Ch0.Connected", config.Tags[2].Name);

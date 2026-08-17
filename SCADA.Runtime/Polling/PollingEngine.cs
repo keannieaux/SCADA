@@ -19,15 +19,21 @@ public sealed class PollingEngine
     private readonly ProjectConfiguration _config;
     private readonly ITagTable _tagTable;
     private readonly TimeSpan _pollPeriod;
+    private readonly ReconnectBackoff _backoff;
 
     private CancellationTokenSource? _cts;
     private Task[]? _channelTasks;
 
-    public PollingEngine(ProjectConfiguration config, ITagTable tagTable, TimeSpan? pollPeriod = null)
+    /// <param name="backoff">
+    /// Политика задержки переподключения. По умолчанию боевая, 1с → 30с (§4.2).
+    /// </param>
+    public PollingEngine(ProjectConfiguration config, ITagTable tagTable,
+        TimeSpan? pollPeriod = null, ReconnectBackoff? backoff = null)
     {
         _config = config;
         _tagTable = tagTable;
         _pollPeriod = pollPeriod ?? TimeSpan.FromMilliseconds(100);
+        _backoff = backoff ?? ReconnectBackoff.Default;
     }
 
     /// <summary>
@@ -49,6 +55,10 @@ public sealed class PollingEngine
 
         _channelTasks = _config.Devices
             .GroupBy(d => d.ChannelId)
+            // Группа из одних внутренних устройств (диагностика архива,
+            // канал без устройств) опрашивать нечего: значения ей пишут
+            // подсистемы, а не драйвер. Задача-пустышка только жгла бы CPU.
+            .Where(g => g.Any(d => d.DriverName != "internal"))
             .Select(g => RunChannelAsync(g.ToArray(), _cts.Token))
             .ToArray();
 
@@ -204,15 +214,11 @@ public sealed class PollingEngine
         catch (Exception) { /* соединение уже мёртво — игнорируем ошибки dispose */ }
     }
 
-    private static void ScheduleReconnect(DevicePollState state)
+    private void ScheduleReconnect(DevicePollState state)
     {
         state.ConsecutiveFailures++;
-        state.NextConnectAt = DateTimeOffset.UtcNow + BackoffDelay(state.ConsecutiveFailures);
+        state.NextConnectAt = DateTimeOffset.UtcNow + _backoff.Delay(state.ConsecutiveFailures);
     }
-
-    // экспоненциальная задержка по ТЗ §4.2: 1с → 2 → 4 → 8 → 16 → 30с (потолок)
-    private static TimeSpan BackoffDelay(int consecutiveFailures)
-        => TimeSpan.FromSeconds(Math.Min(30, 1 << Math.Min(consecutiveFailures - 1, 5)));
 
     /// <summary>Состояние опроса одного устройства внутри канала.</summary>
     private sealed class DevicePollState(DeviceDefinition device, TagDefinition[] tags, TagValue[] buffer)

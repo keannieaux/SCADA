@@ -4,7 +4,6 @@
     <PackageReference Include="Microsoft.Extensions.Hosting" />
     <ProjectReference Include="..\SCADA.Core\SCADA.Core.csproj" />
     <ProjectReference Include="..\SCADA.Drivers.Abstractions\SCADA.Drivers.Abstractions.csproj" />
-    <ProjectReference Include="..\SCADA.Drivers.Simulator\SCADA.Drivers.Simulator.csproj" />
     <ProjectReference Include="..\SCADA.Historian\SCADA.Historian.csproj" />
   </ItemGroup>
 

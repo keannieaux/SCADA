@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using SCADA.Core.Tags;
 using SCADA.Drivers.Modbus;
+using SCADA.Drivers.Simulator;
 using SCADA.Package;
 using SCADA.Historian;
 using SCADA.Runtime.Configuration;
@@ -17,7 +18,10 @@ using SCADA.Server;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-// внешние драйверы регистрируются здесь — Runtime о них не знает (ТЗ §7.2)
+// Внешние драйверы регистрируются здесь — Runtime о них не знает (ТЗ §7.2).
+// Симулятор тоже подключается в composition root: он нужен не только в dev,
+// но и для проверки мнемосхем без реального ПЛК (режим исполнения в редакторе).
+DriverFactory.Register("simulator", () => new SimulatorDriver());
 DriverFactory.Register("modbus-tcp", () => new ModbusTcpDriver());
 
 var projectPath = builder.Configuration["Runtime:Project"]

@@ -42,6 +42,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SCADA.Historian.Tests", "SC
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SCADA.Core.Tests", "SCADA.Core.Tests\SCADA.Core.Tests.csproj", "{9525CF44-E218-4098-A417-5A78CF9C61F1}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SCADA.Architecture.Tests", "SCADA.Architecture.Tests\SCADA.Architecture.Tests.csproj", "{48BFE7F1-BFBA-4C8B-A5A4-0ABA243C0763}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -304,6 +306,18 @@ Global
 		{9525CF44-E218-4098-A417-5A78CF9C61F1}.Release|x64.Build.0 = Release|Any CPU
 		{9525CF44-E218-4098-A417-5A78CF9C61F1}.Release|x86.ActiveCfg = Release|Any CPU
 		{9525CF44-E218-4098-A417-5A78CF9C61F1}.Release|x86.Build.0 = Release|Any CPU
+		{48BFE7F1-BFBA-4C8B-A5A4-0ABA243C0763}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{48BFE7F1-BFBA-4C8B-A5A4-0ABA243C0763}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{48BFE7F1-BFBA-4C8B-A5A4-0ABA243C0763}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{48BFE7F1-BFBA-4C8B-A5A4-0ABA243C0763}.Debug|x64.Build.0 = Debug|Any CPU
+		{48BFE7F1-BFBA-4C8B-A5A4-0ABA243C0763}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{48BFE7F1-BFBA-4C8B-A5A4-0ABA243C0763}.Debug|x86.Build.0 = Debug|Any CPU
+		{48BFE7F1-BFBA-4C8B-A5A4-0ABA243C0763}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{48BFE7F1-BFBA-4C8B-A5A4-0ABA243C0763}.Release|Any CPU.Build.0 = Release|Any CPU
+		{48BFE7F1-BFBA-4C8B-A5A4-0ABA243C0763}.Release|x64.ActiveCfg = Release|Any CPU
+		{48BFE7F1-BFBA-4C8B-A5A4-0ABA243C0763}.Release|x64.Build.0 = Release|Any CPU
+		{48BFE7F1-BFBA-4C8B-A5A4-0ABA243C0763}.Release|x86.ActiveCfg = Release|Any CPU
+		{48BFE7F1-BFBA-4C8B-A5A4-0ABA243C0763}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

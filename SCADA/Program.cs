@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using SCADA.ViewModels;
 using SCADA.Views;
 using SCADA.Core.Tags;
+using SCADA.Drivers.Simulator;
 
 namespace SCADA;
 
@@ -40,6 +41,7 @@ sealed class Program
         builder.Services.AddSingleton<MainWindow>();
         builder.Services.AddSingleton(config);
         builder.Services.AddSingleton<TagsViewModel>();
+        DriverFactory.Register("simulator", () => new SimulatorDriver());
 
         Services = builder.Build().Services;
         Services.GetRequiredService<PollingEngine>().StartAsync();

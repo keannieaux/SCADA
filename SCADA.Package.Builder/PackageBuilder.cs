@@ -1,3 +1,5 @@
+using SCADA.Core.Alarms;
+using SCADA.Core.Tags;
 using SCADA.Expressions.Compiler;
 using SCADA.Package.Builder.Sections;
 using SCADA.Runtime.Configuration;
@@ -29,11 +31,108 @@ public static class PackageBuilder
         var writer = new PackageWriter();
         writer.AddEntry("tags.bin", TagsSectionWriter.Write(config.Tags));
         writer.AddEntry("devices.bin", DevicesSectionWriter.Write(config.Channels, config.Devices));
-        writer.AddEntry("code.bin", CodeSectionWriter.Write(expressions ?? []));
+
+        // M5: expression-правила сигнализации компилируются в общий пул
+        // code.bin; правила получают индексы выражений и тегов (§6)
+        var allExpressions = new List<CompiledExpression>(expressions ?? []);
+        CompileAlarmRules(config, allExpressions);
+        writer.AddEntry("code.bin",
+            CodeSectionWriter.Write(allExpressions, out var poolIndices));
+        RemapAlarmExpressionIndices(config, poolIndices);
+
+        if (config.Alarms.Rules.Count > 0)
+        {
+            writer.AddEntry("alarms.bin", AlarmsSectionWriter.Write(config.Alarms));
+            AddSoundEntries(writer, config, projectDirectory);
+        }
 
         writer.Save(outputPath, config.Name, config.Version);
 
         ReportArchiveVolume(config, report);
+    }
+
+    /// <summary>
+    /// Компиляция expression-правил и раннее связывание тегов threshold-правил
+    /// (§11.6): в пакете правила ссылаются на индексы, а не на имена.
+    /// Ошибка компиляции — ошибка сборки пакета, а не рантайма.
+    /// </summary>
+    private static void CompileAlarmRules(ProjectConfiguration config,
+        List<CompiledExpression> pool)
+    {
+        if (config.Alarms.Rules.Count == 0)
+            return;
+
+        var catalog = new BuilderTagCatalog(config.Tags);
+        foreach (var rule in config.Alarms.Rules)
+        {
+            switch (rule.Type)
+            {
+                case AlarmType.Threshold:
+                    // существование тега гарантирует валидация ProjectLoader
+                    rule.CompiledTagIndices =
+                        [catalog.GetIndex(rule.TagName!, rule.Name)];
+                    break;
+
+                case AlarmType.Expression:
+                    CompiledExpression compiled;
+                    try
+                    {
+                        compiled = ExpressionCompiler.Compile(rule.Condition!, catalog);
+                    }
+                    catch (ExpressionCompileException ex)
+                    {
+                        throw new InvalidOperationException(
+                            $"Правило сигнализации '{rule.Name}': {ex.Message}", ex);
+                    }
+                    rule.CompiledExpressionIndex = pool.Count; // до дедупликации
+                    rule.CompiledTagIndices = compiled.TagIndices;
+                    pool.Add(compiled);
+                    break;
+            }
+        }
+    }
+
+    /// <summary>Перевод индексов выражений правил из входного списка
+    /// в итоговую таблицу пула после дедупликации.</summary>
+    private static void RemapAlarmExpressionIndices(ProjectConfiguration config, int[] poolIndices)
+    {
+        foreach (var rule in config.Alarms.Rules)
+            if (rule.CompiledExpressionIndex is int input)
+                rule.CompiledExpressionIndex = poolIndices[input];
+    }
+
+    /// <summary>
+    /// Звуковые файлы (§2.8) копируются в пакет секциями sounds/<имя> —
+    /// иначе на объекте звука не будет. Отсутствующий файл — ошибка сборки.
+    /// </summary>
+    private static void AddSoundEntries(PackageWriter writer,
+        ProjectConfiguration config, string projectDirectory)
+    {
+        foreach (string file in config.Alarms.Sound.Files.Values.Distinct())
+        {
+            string fullPath = Path.Combine(projectDirectory, file);
+            if (!File.Exists(fullPath))
+                throw new InvalidOperationException(
+                    $"Звуковой файл сигнализации '{file}' не найден в каталоге проекта");
+            writer.AddEntry($"sounds/{Path.GetFileName(file)}", File.ReadAllBytes(fullPath));
+        }
+    }
+
+    /// <summary>Каталог тегов проекта для компилятора выражений при сборке.</summary>
+    private sealed class BuilderTagCatalog(IReadOnlyList<TagDefinition> tags)
+        : ITagCatalog
+    {
+        private readonly Dictionary<string, int> _byName =
+            tags.ToDictionary(t => t.Name, t => t.Id.Value);
+
+        public bool TryGetIndex(string name, out int index)
+            => _byName.TryGetValue(name, out index);
+
+        public int GetIndex(string name, string ruleName)
+            => _byName.TryGetValue(name, out int index)
+                ? index
+                : throw new InvalidOperationException(
+                    $"Правило сигнализации '{ruleName}': тег '{name}' не найден");
     }
 
     /// <summary>

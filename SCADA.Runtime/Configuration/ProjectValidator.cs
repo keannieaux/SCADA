@@ -1,3 +1,4 @@
+using SCADA.Core.Alarms;
 using SCADA.Core.Tags;
 
 namespace SCADA.Runtime.Configuration;
@@ -23,6 +24,7 @@ public static class ProjectValidator
         ValidateReferences(config, errors);
         ValidateTagIds(config.Tags, errors);
         ValidateNoSystemEntities(config, errors);
+        ValidateAlarms(config, errors);
         return errors;
     }
 
@@ -72,6 +74,56 @@ public static class ProjectValidator
                 errors.Add($"Тег '{tag.Name}' (id={tag.Id.Value}): префикс '{DiagnosticsGenerator.SystemPrefix}' зарезервирован за системной диагностикой");
             if (tag.Origin != TagOrigin.Process)
                 errors.Add($"Тег '{tag.Name}' (id={tag.Id.Value}): Origin={tag.Origin} недопустим в исходном проекте — системные теги генерируются при загрузке");
+        }
+    }
+
+    // правила сигнализации (docs/M5-plan.md): ссылки на теги, форма условий,
+    // упорядоченность уставок. Проверяется исходная форма — до генерации
+    // диагностических тегов, поэтому ссылаться на них правила не могут
+    private static void ValidateAlarms(ProjectConfiguration config, List<string> errors)
+    {
+        var tagNames = config.Tags.Select(t => t.Name).ToHashSet();
+
+        foreach (var group in config.Alarms.Rules.GroupBy(r => r.Name).Where(g => g.Count() > 1))
+            errors.Add($"Дубликат имени правила сигнализации '{group.Key}'");
+
+        foreach (var rule in config.Alarms.Rules)
+        {
+            if (rule.MinDurationMs < 0)
+                errors.Add($"Правило '{rule.Name}': minDurationMs не может быть отрицательным");
+            if (rule.Hysteresis < 0)
+                errors.Add($"Правило '{rule.Name}': hysteresis не может быть отрицательным");
+
+            switch (rule.Type)
+            {
+                case AlarmType.Threshold:
+                    if (string.IsNullOrWhiteSpace(rule.TagName))
+                        errors.Add($"Правило '{rule.Name}': для Threshold не задан tagName");
+                    else if (!tagNames.Contains(rule.TagName))
+                        errors.Add($"Правило '{rule.Name}': тег '{rule.TagName}' не найден");
+
+                    if (rule.Limits is null || rule.Limits.Count == 0)
+                    {
+                        errors.Add($"Правило '{rule.Name}': для Threshold не задано ни одной уставки (limits)");
+                    }
+                    else
+                    {
+                        foreach (var dup in rule.Limits.GroupBy(l => l.Kind).Where(g => g.Count() > 1))
+                            errors.Add($"Правило '{rule.Name}': уставка {dup.Key} задана дважды");
+
+                        // ранги: HiHi > Hi > Lo > LoLo — значения обязаны строго убывать
+                        var ordered = rule.Limits.OrderByDescending(l => l.Kind).ToArray();
+                        for (int i = 1; i < ordered.Length; i++)
+                            if (ordered[i - 1].Value <= ordered[i].Value)
+                                errors.Add($"Правило '{rule.Name}': уставка {ordered[i - 1].Kind} ({ordered[i - 1].Value}) должна быть больше {ordered[i].Kind} ({ordered[i].Value})");
+                    }
+                    break;
+
+                case AlarmType.Expression:
+                    if (string.IsNullOrWhiteSpace(rule.Condition))
+                        errors.Add($"Правило '{rule.Name}': для Expression не задано condition");
+                    break;
+            }
         }
     }
 }

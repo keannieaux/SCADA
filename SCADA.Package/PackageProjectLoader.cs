@@ -25,7 +25,11 @@ public static class PackageProjectLoader
             Version = reader.Manifest.ProjectVersion,
             Tags = tags,
             Devices = devices,
-            Channels = channels
+            Channels = channels,
+            // M5: секция опциональна — проект без alarms.json собирается без неё
+            Alarms = reader.HasEntry("alarms.bin")
+                ? AlarmsSectionReader.Read(reader.ReadEntry("alarms.bin"))
+                : new Core.Alarms.AlarmConfiguration()
         };
     }
 

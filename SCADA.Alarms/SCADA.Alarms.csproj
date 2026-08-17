@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SCADA.Core\SCADA.Core.csproj" />
+    <ProjectReference Include="..\SCADA.Expressions\SCADA.Expressions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+  </ItemGroup>
+
+</Project>

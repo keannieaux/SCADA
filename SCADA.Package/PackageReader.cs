@@ -96,6 +96,10 @@ public sealed class PackageReader : IDisposable
         return ReadAll(entry);
     }
 
+    /// <summary>Наличие секции в пакете — для опциональных секций
+    /// (alarms.bin есть только в проектах с сигнализацией).</summary>
+    public bool HasEntry(string name) => _archive.GetEntry(name) is not null;
+
     private static byte[] ReadAll(ZipArchiveEntry entry)
     {
         using var stream = entry.Open();

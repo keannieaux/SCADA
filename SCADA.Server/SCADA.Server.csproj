@@ -9,6 +9,9 @@
     <ProjectReference Include="..\SCADA.Drivers.Simulator\SCADA.Drivers.Simulator.csproj" />
     <ProjectReference Include="..\SCADA.Package\SCADA.Package.csproj" />
     <ProjectReference Include="..\SCADA.Runtime\SCADA.Runtime.csproj" />
+    <!-- dev-режим: компиляция expression-правил из исходного проекта.
+         Боевая поставка работает с .scadapkg и компилятор не использует (§5.4) -->
+    <ProjectReference Include="..\SCADA.Expressions.Compiler\SCADA.Expressions.Compiler.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

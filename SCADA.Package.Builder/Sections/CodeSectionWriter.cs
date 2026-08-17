@@ -14,6 +14,15 @@ namespace SCADA.Package.Builder.Sections;
 public static class CodeSectionWriter
 {
     public static byte[] Write(IReadOnlyList<CompiledExpression> expressions)
+        => Write(expressions, out _);
+
+    /// <summary>
+    /// poolIndices[i] — индекс i-го входного выражения в итоговой таблице
+    /// пула с учётом дедупликации. Нужен потребителям, которые ссылаются
+    /// на выражения по номеру (правила сигнализации, M5).
+    /// </summary>
+    public static byte[] Write(IReadOnlyList<CompiledExpression> expressions,
+        out int[] poolIndices)
     {
         var constants = new List<double>();
         var constantIndex = new Dictionary<double, int>();
@@ -21,18 +30,26 @@ public static class CodeSectionWriter
 
         // смещение/длина в blob + теги выражения (для пересчёта по эпохам §11.7)
         var table = new List<(int Offset, int Length, int[] Tags)>();
-        var seen = new HashSet<string>(); // ключи уже добавленных выражений
+        var indexByKey = new Dictionary<string, int>(); // дедупликация
 
-        foreach (var expr in expressions)
+        poolIndices = new int[expressions.Count];
+        for (int i = 0; i < expressions.Count; i++)
         {
+            var expr = expressions[i];
+
             // дедупликация: одинаковые байткод+константы = одна запись в пуле
             string key = Convert.ToBase64String(expr.Code) + "|" +
                          string.Join(",", expr.Constants);
-            if (!seen.Add(key))
+            if (indexByKey.TryGetValue(key, out int existing))
+            {
+                poolIndices[i] = existing;
                 continue;
+            }
 
             byte[] remapped = RemapConstants(expr.Code, expr.Constants, constants, constantIndex);
 
+            indexByKey[key] = table.Count;
+            poolIndices[i] = table.Count;
             table.Add((blob.Count, remapped.Length, expr.TagIndices));
             blob.AddRange(remapped);
         }

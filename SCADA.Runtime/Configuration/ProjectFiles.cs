@@ -1,3 +1,4 @@
+using SCADA.Core.Alarms;
 using SCADA.Core.Channels;
 using SCADA.Core.Devices;
 using SCADA.Core.Tags;
@@ -25,4 +26,16 @@ public class TagsFile
 {
     public int FormatVersion { get; set; }
     public IReadOnlyList<TagDefinition> Tags { get; set; } = [];
+}
+
+// alarms.json: {"formatVersion": 1, "templates": {...}, "sound": {...},
+//               "defaults": {...}, "rules": [...]}
+// Файл опционален (docs/M5-plan.md §2.2): отсутствие = проект без аварий.
+public class AlarmsFile
+{
+    public int FormatVersion { get; set; }
+    public Dictionary<string, string> Templates { get; set; } = new();
+    public SoundConfiguration Sound { get; set; } = new();
+    public AlarmDefaults Defaults { get; set; } = new();
+    public IReadOnlyList<AlarmRule> Rules { get; set; } = [];
 }

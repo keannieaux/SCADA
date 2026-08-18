@@ -1,11 +1,16 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using SCADA.Alarms;
+using SCADA.Core.Alarms;
 using SCADA.Core.Tags;
 using SCADA.Drivers.Modbus;
 using SCADA.Drivers.Simulator;
+using SCADA.Expressions.Compiler;
 using SCADA.Package;
+using SCADA.Package.Sections;
 using SCADA.Historian;
+using SCADA.Runtime.Alarms;
 using SCADA.Runtime.Configuration;
 using SCADA.Runtime.Historian;
 using SCADA.Runtime.Polling;
@@ -30,7 +35,9 @@ var pollPeriod = TimeSpan.FromMilliseconds(
     builder.Configuration.GetValue("Runtime:PollPeriodMs", 100));
 
 ProjectConfiguration config;
-if (Directory.Exists(projectPath))
+CodePool? codePool = null;
+bool devMode = Directory.Exists(projectPath);
+if (devMode)
 {
     // dev-режим: исходный каталог проекта без сборки пакета.
     // Боевая поставка работает только с .scadapkg (ТЗ §14.2)
@@ -39,8 +46,16 @@ if (Directory.Exists(projectPath))
 }
 else
 {
-    config = PackageProjectLoader.Load(projectPath);
+    using var packageReader = PackageReader.Open(projectPath);
+    config = PackageProjectLoader.Load(packageReader);
+    codePool = PackageProjectLoader.LoadCodePool(packageReader);
 }
+
+// Изменяемое состояние живёт под папкой проекта (ТЗ §14.6). Для пакета
+// это каталог, в котором он лежит: сам .scadapkg неизменяем.
+string projectDirectory = devMode
+    ? projectPath
+    : Path.GetDirectoryName(Path.GetFullPath(projectPath))!;
 
 var tagTable = new TagTable(config.Tags.Count);
 var engine = new PollingEngine(config, tagTable, pollPeriod);
@@ -49,6 +64,88 @@ builder.Services.AddSingleton(config);
 builder.Services.AddSingleton<ITagTable>(tagTable);
 builder.Services.AddSingleton(engine);
 builder.Services.AddHostedService<RuntimeHostService>();
+
+// --- сигнализация (M5, docs/M5-plan.md) ---
+
+var journalOptions = new JournalOptions();
+builder.Configuration.GetSection("Runtime:Journal").Bind(journalOptions);
+var alarmOptions = new AlarmPipelineOptions();
+builder.Configuration.GetSection("Runtime:Alarms").Bind(alarmOptions);
+
+// dev-режим: условия expression-правил компилируются на месте. Боевая
+// поставка получает скомпилированные правила из пакета (§6) и компилятор
+// не использует (§5.4).
+Func<AlarmRule, PreparedAlarmRule?>? expressionFactory = null;
+if (devMode)
+{
+    var catalog = new ProjectTagCatalog(config);
+    expressionFactory = rule =>
+    {
+        try
+        {
+            var compiled = ExpressionCompiler.Compile(rule.Condition!, catalog);
+            return new PreparedAlarmRule
+            {
+                Rule = rule,
+                Condition = compiled.ToExpression(),
+                TagIndices = compiled.TagIndices
+            };
+        }
+        catch (ExpressionCompileException ex)
+        {
+            Console.WriteLine($"[сигнализация] правило '{rule.Name}': {ex.Message}");
+            return null;
+        }
+    };
+}
+else if (codePool is not null)
+{
+    // боевая поставка: правила уже скомпилированы в пул code.bin пакета (§6)
+    expressionFactory = rule =>
+    {
+        if (rule.CompiledExpressionIndex is not int index)
+        {
+            Console.WriteLine(
+                $"[сигнализация] правило '{rule.Name}': нет скомпилированного условия, правило пропущено");
+            return null;
+        }
+        return new PreparedAlarmRule
+        {
+            Rule = rule,
+            Condition = codePool.ToExpression(index),
+            TagIndices = codePool.Expressions[index].TagIndices
+        };
+    };
+}
+
+var preparedRules = AlarmRulePreparer.Prepare(
+    config.Alarms, config.Tags, expressionFactory,
+    warning => Console.WriteLine(warning));
+
+var alarmEngine = new AlarmEngine(config.Alarms, preparedRules, tagTable, config.Tags);
+
+var eventJournal = new SqliteEventJournal(
+    Path.Combine(projectDirectory, "events.db"),
+    warning => Console.WriteLine(warning));
+
+// восстановление активных аварий из журнала (§7.3):
+// неквитированные переживают перезапуск службы
+var recovered = AlarmStateRecovery.Resolve(
+    eventJournal.ReadRecentDesc(alarmOptions.RecoveryReadLimit));
+alarmEngine.RestoreRecovered(recovered);
+if (recovered.Count > 0)
+    Console.WriteLine($"[сигнализация] восстановлено активных аварий: {recovered.Count}");
+
+var alarmBroadcaster = new AlarmChangeBroadcaster();
+
+builder.Services.AddSingleton(alarmOptions);
+builder.Services.AddSingleton(journalOptions);
+builder.Services.AddSingleton<IAlarmEngine>(alarmEngine);
+builder.Services.AddSingleton<IEventJournal>(eventJournal);
+builder.Services.AddSingleton(alarmBroadcaster);
+builder.Services.AddHostedService(_ => new AlarmPipeline(
+    tagTable, alarmEngine, eventJournal, alarmBroadcaster,
+    alarmOptions, journalOptions, warning => Console.WriteLine(warning)));
 
 // --- архив (ТЗ §8, docs/archive-format.md) ---
 
@@ -63,12 +160,6 @@ builder.Services.AddSingleton(queryLimits);
 
 if (archiveOptions.Enabled)
 {
-    // Изменяемое состояние живёт под папкой проекта (ТЗ §14.6). Для пакета
-    // это каталог, в котором он лежит: сам .scadapkg неизменяем.
-    string projectDirectory = Directory.Exists(projectPath)
-        ? projectPath
-        : Path.GetDirectoryName(Path.GetFullPath(projectPath))!;
-
     string archiveRoot = archiveOptions.ResolveRoot(projectDirectory);
 
     var registry = new ArchiveStreamRegistry(archiveRoot,
@@ -127,7 +218,8 @@ if (archiveOptions.Enabled)
     builder.Services.AddHostedService<ArchiveHostService>();
 
     builder.Services.AddSingleton<IRuntimeClient>(sp =>
-        new LocalRuntimeClient(tagTable, sp.GetRequiredService<IHistorian>(), queryLimits));
+        new LocalRuntimeClient(tagTable, sp.GetRequiredService<IHistorian>(), queryLimits,
+            alarmEngine, eventJournal, alarmBroadcaster));
 
     Console.WriteLine($"[архив] каталог: {archiveRoot}");
 }
@@ -135,7 +227,8 @@ else
 {
     // Без архива клиент отдаёт текущие значения и пустую историю: схемы и
     // диагностика работают, тренды показывают пустоту вместо падения.
-    builder.Services.AddSingleton<IRuntimeClient>(new LocalRuntimeClient(tagTable, null, queryLimits));
+    builder.Services.AddSingleton<IRuntimeClient>(new LocalRuntimeClient(
+        tagTable, null, queryLimits, alarmEngine, eventJournal, alarmBroadcaster));
     Console.WriteLine("[архив] выключен настройкой Runtime:Archive:Enabled");
 }
 

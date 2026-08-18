@@ -1,3 +1,4 @@
+using SCADA.Alarms;
 using SCADA.Core.Tags;
 
 namespace SCADA.Runtime.Runtime;
@@ -78,4 +79,28 @@ public interface IRuntimeClient
     // Запись в устройства — это M7 (команда в ПЛК с подтверждением и аудитом),
     // в этом интерфейсе появится отдельным методом позже.
     void WriteLocal(TagId id, double value);
+
+    // --- сигнализация (M5, docs/M5-plan.md §9) ---
+    //
+    // Контракт транспортно-нейтрален: remote-реализация повторит те же формы
+    // через gRPC, когда появится multi-ARM (ТЗ §12). Если сигнализация не
+    // настроена, методы отдают пустые результаты, а не падают.
+
+    /// <summary>Активные и ожидающие квитирования аварии для баннера.</summary>
+    ValueTask<IReadOnlyList<ActiveAlarm>> GetActiveAlarmsAsync(
+        AlarmFilter filter, CancellationToken ct = default);
+
+    /// <summary>История событий журнала с фильтрами.</summary>
+    ValueTask<IReadOnlyList<AlarmEvent>> GetAlarmHistoryAsync(
+        AlarmHistoryQuery query, CancellationToken ct = default);
+
+    /// <summary>Квитирование по именам правил (одна авария на правило, §7.1).
+    /// acknowledgedBy в M5 — "os-user@station" (§2.9),
+    /// в M7 заменяется аутентифицированным пользователем, контракт не меняется.</summary>
+    ValueTask AcknowledgeAlarmsAsync(
+        IEnumerable<string> ruleNames, string acknowledgedBy,
+        string? comment = null, CancellationToken ct = default);
+
+    /// <summary>Подписка на изменения аварий (баннер, звук).</summary>
+    IAsyncEnumerable<AlarmChange> SubscribeAlarmsAsync(CancellationToken ct = default);
 }

@@ -1,4 +1,6 @@
+using SCADA.Alarms;
 using SCADA.Core.Tags;
+using SCADA.Runtime.Alarms;
 using SCADA.Runtime.Historian;
 using SCADA.Runtime.TagTable;
 
@@ -14,19 +16,32 @@ public sealed class LocalRuntimeClient : IRuntimeClient
     private readonly ITagTable _tagTable;
     private readonly IHistorian? _historian;
     private readonly HistoryQueryLimits _limits;
+    private readonly IAlarmEngine? _alarmEngine;
+    private readonly IEventJournal? _eventJournal;
+    private readonly AlarmChangeBroadcaster? _alarmBroadcaster;
 
     /// <param name="historian">
     /// null, если архив выключен: тогда запросы истории отдают пустые ряды,
     /// а не падают. Схемы и текущие значения работают без архива.
     /// </param>
+    /// <param name="alarmEngine">
+    /// null, если сигнализация не настроена: методы аварий отдают пустые
+    /// результаты. Тот же принцип, что у <paramref name="historian"/>.
+    /// </param>
     public LocalRuntimeClient(
         ITagTable tagTable,
         IHistorian? historian = null,
-        HistoryQueryLimits? limits = null)
+        HistoryQueryLimits? limits = null,
+        IAlarmEngine? alarmEngine = null,
+        IEventJournal? eventJournal = null,
+        AlarmChangeBroadcaster? alarmBroadcaster = null)
     {
         _tagTable = tagTable;
         _historian = historian;
         _limits = limits ?? new HistoryQueryLimits();
+        _alarmEngine = alarmEngine;
+        _eventJournal = eventJournal;
+        _alarmBroadcaster = alarmBroadcaster;
     }
 
     public TagValue Read(TagId id) => _tagTable.Read(id);
@@ -122,6 +137,52 @@ public sealed class LocalRuntimeClient : IRuntimeClient
 
     public int ReadRecent(TagId id, Span<TagValue> destination)
         => _historian?.ReadRecent(id, destination) ?? 0;
+
+    // --- сигнализация (M5) ---
+
+    public ValueTask<IReadOnlyList<ActiveAlarm>> GetActiveAlarmsAsync(
+        AlarmFilter filter, CancellationToken ct = default)
+        => ValueTask.FromResult<IReadOnlyList<ActiveAlarm>>(
+            _alarmEngine?.GetActive(filter) ?? Array.Empty<ActiveAlarm>());
+
+    public ValueTask<IReadOnlyList<AlarmEvent>> GetAlarmHistoryAsync(
+        AlarmHistoryQuery query, CancellationToken ct = default)
+        => ValueTask.FromResult<IReadOnlyList<AlarmEvent>>(
+            _eventJournal?.Query(query) ?? Array.Empty<AlarmEvent>());
+
+    public ValueTask AcknowledgeAlarmsAsync(
+        IEnumerable<string> ruleNames, string acknowledgedBy,
+        string? comment = null, CancellationToken ct = default)
+    {
+        if (_alarmEngine is null)
+            return ValueTask.CompletedTask;
+
+        long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        foreach (var ruleName in ruleNames)
+        {
+            var ev = _alarmEngine.Acknowledge(ruleName, acknowledgedBy, comment, now);
+            if (ev is null)
+                continue;
+
+            // квитирование идёт тем же путём, что события конвейера:
+            // журнал + рассылка подписчикам
+            _eventJournal?.Append(new[] { ev });
+            var view = _alarmEngine.GetAlarm(ruleName);
+            if (view is not null)
+                _alarmBroadcaster?.Publish(new AlarmChange(AlarmChangeKind.Acknowledged, view));
+        }
+        return ValueTask.CompletedTask;
+    }
+
+    public IAsyncEnumerable<AlarmChange> SubscribeAlarmsAsync(CancellationToken ct = default)
+        => _alarmBroadcaster?.Subscribe(ct) ?? EmptyAlarmChanges(ct);
+
+    private static async IAsyncEnumerable<AlarmChange> EmptyAlarmChanges(
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+    {
+        await Task.Delay(Timeout.Infinite, ct);
+        yield break;
+    }
 
     /// <summary>
     /// Диапазон не помещается в предел сырых точек — отдаём агрегаты по числу

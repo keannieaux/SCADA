@@ -17,14 +17,19 @@ public static class ProjectLoader
             ProjectJsonContext.Default.DevicesFile, errors);
         var tagsFile    = LoadFile(projectDirectory, "tags.json",
             ProjectJsonContext.Default.TagsFile, errors);
+        // alarms.json опционален (docs/M5-plan.md §2.2): нет файла — нет аварий
+        var alarmsFile  = LoadFile(projectDirectory, "alarms.json",
+            ProjectJsonContext.Default.AlarmsFile, errors, optional: true);
 
         // если файлы не прочитались — дальше проверять нечего
-        if (projectFile is null || devicesFile is null || tagsFile is null)
+        if (projectFile is null || devicesFile is null || tagsFile is null || errors.Count > 0)
             throw new ProjectConfigurationException(errors);
 
         CheckFormatVersion(projectFile.FormatVersion, "project.json", errors);
         CheckFormatVersion(devicesFile.FormatVersion, "devices.json", errors);
         CheckFormatVersion(tagsFile.FormatVersion, "tags.json", errors);
+        if (alarmsFile is not null)
+            CheckFormatVersion(alarmsFile.FormatVersion, "alarms.json", errors);
 
         var config = new ProjectConfiguration
         {
@@ -32,7 +37,16 @@ public static class ProjectLoader
             Version = projectFile.Version,
             Tags = tagsFile.Tags,
             Devices = devicesFile.Devices,
-            Channels = devicesFile.Channels
+            Channels = devicesFile.Channels,
+            Alarms = alarmsFile is null
+                ? new SCADA.Core.Alarms.AlarmConfiguration()
+                : new SCADA.Core.Alarms.AlarmConfiguration
+                {
+                    Rules = alarmsFile.Rules,
+                    Templates = alarmsFile.Templates,
+                    Sound = alarmsFile.Sound,
+                    Defaults = alarmsFile.Defaults
+                }
         };
 
         // правила целостности живут в ProjectValidator — те же, что использует редактор
@@ -50,12 +64,13 @@ public static class ProjectLoader
     }
 
     private static T? LoadFile<T>(string directory, string fileName,
-        JsonTypeInfo<T> typeInfo, List<string> errors)
+        JsonTypeInfo<T> typeInfo, List<string> errors, bool optional = false)
     {
         var path = Path.Combine(directory, fileName);
         if (!File.Exists(path))
         {
-            errors.Add($"Не найден файл {fileName}");
+            if (!optional)
+                errors.Add($"Не найден файл {fileName}");
             return default;
         }
 

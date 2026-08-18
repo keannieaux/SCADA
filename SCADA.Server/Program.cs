@@ -11,6 +11,7 @@ using SCADA.Package;
 using SCADA.Package.Sections;
 using SCADA.Historian;
 using SCADA.Runtime.Alarms;
+using SCADA.Runtime.Audit;
 using SCADA.Runtime.Configuration;
 using SCADA.Runtime.Historian;
 using SCADA.Runtime.Polling;
@@ -58,10 +59,21 @@ string projectDirectory = devMode
     : Path.GetDirectoryName(Path.GetFullPath(projectPath))!;
 
 var tagTable = new TagTable(config.Tags.Count);
-var engine = new PollingEngine(config, tagTable, pollPeriod);
+
+// M7: запись в устройства — аудит (та же events.db, таблица Audit, ТЗ §13)
+// и персистентность internal-тегов (файл в папке проекта, §14.6)
+var auditJournal = new SqliteAuditJournal(
+    Path.Combine(projectDirectory, "events.db"),
+    warning => Console.WriteLine(warning));
+var persistentTags = new PersistentTagStore(
+    Path.Combine(projectDirectory, "persistent-tags.json"));
+
+var engine = new PollingEngine(config, tagTable, pollPeriod,
+    audit: auditJournal, persistence: persistentTags);
 
 builder.Services.AddSingleton(config);
 builder.Services.AddSingleton<ITagTable>(tagTable);
+builder.Services.AddSingleton<IAuditJournal>(auditJournal);
 builder.Services.AddSingleton(engine);
 builder.Services.AddHostedService<RuntimeHostService>();
 
@@ -219,7 +231,7 @@ if (archiveOptions.Enabled)
 
     builder.Services.AddSingleton<IRuntimeClient>(sp =>
         new LocalRuntimeClient(tagTable, sp.GetRequiredService<IHistorian>(), queryLimits,
-            alarmEngine, eventJournal, alarmBroadcaster));
+            alarmEngine, eventJournal, alarmBroadcaster, engine));
 
     Console.WriteLine($"[архив] каталог: {archiveRoot}");
 }
@@ -228,7 +240,7 @@ else
     // Без архива клиент отдаёт текущие значения и пустую историю: схемы и
     // диагностика работают, тренды показывают пустоту вместо падения.
     builder.Services.AddSingleton<IRuntimeClient>(new LocalRuntimeClient(
-        tagTable, null, queryLimits, alarmEngine, eventJournal, alarmBroadcaster));
+        tagTable, null, queryLimits, alarmEngine, eventJournal, alarmBroadcaster, engine));
     Console.WriteLine("[архив] выключен настройкой Runtime:Archive:Enabled");
 }
 

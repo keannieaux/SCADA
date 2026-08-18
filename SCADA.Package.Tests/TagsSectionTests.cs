@@ -28,6 +28,7 @@ public class TagsSectionTests
                 Precision = 3,
                 Units = "°C",
                 IsWritable = true,
+                RequiresWriteConfirmation = true,
                 InitValue = 20.0,
                 IsPersistent = true,
                 Logging = new TagLoggingConfiguration
@@ -71,6 +72,7 @@ public class TagsSectionTests
         Assert.Equal(3, full.Precision);
         Assert.Equal("°C", full.Units);
         Assert.True(full.IsWritable);
+        Assert.True(full.RequiresWriteConfirmation);
         Assert.Equal(20.0, full.InitValue);
         Assert.True(full.IsPersistent);
 
@@ -94,5 +96,6 @@ public class TagsSectionTests
         Assert.Null(minimal.InitValue);
         Assert.Null(minimal.Logging);
         Assert.False(minimal.IsWritable);
+        Assert.False(minimal.RequiresWriteConfirmation);
     }
 }

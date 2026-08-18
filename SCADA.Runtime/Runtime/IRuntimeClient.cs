@@ -75,10 +75,26 @@ public interface IRuntimeClient
 
     // --- запись ---
 
-    // Запись во ВНУТРЕННИЕ теги (уставки, режимы). Синхронно и мгновенно.
-    // Запись в устройства — это M7 (команда в ПЛК с подтверждением и аудитом),
-    // в этом интерфейсе появится отдельным методом позже.
+    // Запись во ВНУТРЕННИЕ теги (уставки, режимы). Синхронно и мгновенно,
+    // без аудита — системное использование. Операторская запись — WriteTagsAsync.
     void WriteLocal(TagId id, double value);
+
+    // --- запись в устройства (M7) ---
+    //
+    // Контракт batch-native: кнопка — пакет из одного элемента, рецепт — из
+    // многих, путь кода один. Пакет валидируется целиком до исполнения.
+    // Каждая попытка пишется в журнал аудита (ТЗ §13). Подтверждение опасных
+    // операций — забота UI (TagDefinition.RequiresWriteConfirmation + свойство
+    // Confirmation элемента), контракт принимает уже подтверждённую команду.
+
+    /// <summary>Пакетная запись. Результат поэлементный, в порядке входа.</summary>
+    ValueTask<IReadOnlyList<TagWriteResult>> WriteTagsAsync(
+        IReadOnlyList<TagWriteItem> items, string requestedBy,
+        CancellationToken ct = default);
+
+    /// <summary>Одиночная запись — обёртка над пакетной.</summary>
+    ValueTask<TagWriteResult> WriteTagAsync(
+        TagId tag, double value, string requestedBy, CancellationToken ct = default);
 
     // --- сигнализация (M5, docs/M5-plan.md §9) ---
     //

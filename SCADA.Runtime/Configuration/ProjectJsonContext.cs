@@ -21,6 +21,7 @@ namespace SCADA.Runtime.Configuration;
 [JsonSerializable(typeof(DevicesFile))]
 [JsonSerializable(typeof(TagsFile))]
 [JsonSerializable(typeof(AlarmsFile))]
+[JsonSerializable(typeof(Dictionary<string, double>))]
 public partial class ProjectJsonContext: JsonSerializerContext
 {
 

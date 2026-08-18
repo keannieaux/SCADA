@@ -1,6 +1,8 @@
+using System.Threading.Channels;
 using SCADA.Core.Devices;
 using SCADA.Core.Tags;
 using SCADA.Drivers.Abstractions;
+using SCADA.Runtime.Audit;
 using SCADA.Runtime.TagTable;
 
 namespace SCADA.Runtime.Polling;
@@ -13,27 +15,58 @@ namespace SCADA.Runtime.Polling;
 /// Переподключение — ответственность движка (единая политика §4.2):
 /// драйвер одноразовый, после ошибки связи выбрасывается и пересоздаётся
 /// с экспоненциальной задержкой 1с → 30с.
+/// Запись (M7) маршалится в цикл канала через очередь — см. PollingEngine.Write.cs:
+/// сокет принадлежит циклу опроса, конкурентного доступа нет.
 /// </summary>
-public sealed class PollingEngine
+public sealed partial class PollingEngine
 {
     private readonly ProjectConfiguration _config;
     private readonly ITagTable _tagTable;
     private readonly TimeSpan _pollPeriod;
     private readonly ReconnectBackoff _backoff;
+    private readonly IAuditJournal? _audit;
+    private readonly PersistentTagStore? _persistence;
+    private readonly TimeSpan _writeTimeout;
+
+    // маршрутизация записи: тег → устройство → канал (конфиг неизменен, строим один раз)
+    private readonly Dictionary<TagId, TagDefinition> _tagById;
+    private readonly Dictionary<DeviceId, DeviceDefinition> _deviceById;
+    private readonly DeviceDefinition[][] _channelGroups;
+    private readonly Dictionary<DeviceId, int> _channelByDevice;
 
     private CancellationTokenSource? _cts;
     private Task[]? _channelTasks;
+    private Channel<PendingWrite>[]? _writePipes;
 
     /// <param name="backoff">
     /// Политика задержки переподключения. По умолчанию боевая, 1с → 30с (§4.2).
     /// </param>
     public PollingEngine(ProjectConfiguration config, ITagTable tagTable,
-        TimeSpan? pollPeriod = null, ReconnectBackoff? backoff = null)
+        TimeSpan? pollPeriod = null, ReconnectBackoff? backoff = null,
+        IAuditJournal? audit = null, PersistentTagStore? persistence = null,
+        int writeTimeoutMs = 10_000)
     {
         _config = config;
         _tagTable = tagTable;
         _pollPeriod = pollPeriod ?? TimeSpan.FromMilliseconds(100);
         _backoff = backoff ?? ReconnectBackoff.Default;
+        _audit = audit;
+        _persistence = persistence;
+        _writeTimeout = TimeSpan.FromMilliseconds(writeTimeoutMs);
+
+        _tagById = config.Tags.ToDictionary(t => t.Id);
+        _deviceById = config.Devices.ToDictionary(d => d.Id);
+        _channelGroups = config.Devices
+            .GroupBy(d => d.ChannelId)
+            // Группа из одних внутренних устройств (диагностика архива,
+            // канал без устройств) опрашивать нечего: значения ей пишут
+            // подсистемы, а не драйвер. Задача-пустышка только жгла бы CPU.
+            .Where(g => g.Any(d => d.DriverName != "internal"))
+            .Select(g => g.ToArray())
+            .ToArray();
+        _channelByDevice = _channelGroups
+            .SelectMany((devices, index) => devices.Select(d => (d.Id, index)))
+            .ToDictionary(x => x.Id, x => x.index);
     }
 
     /// <summary>
@@ -53,13 +86,13 @@ public sealed class PollingEngine
         // внутренние теги никто не опрашивает — записываем им начальные значения
         WriteInitialValues();
 
-        _channelTasks = _config.Devices
-            .GroupBy(d => d.ChannelId)
-            // Группа из одних внутренних устройств (диагностика архива,
-            // канал без устройств) опрашивать нечего: значения ей пишут
-            // подсистемы, а не драйвер. Задача-пустышка только жгла бы CPU.
-            .Where(g => g.Any(d => d.DriverName != "internal"))
-            .Select(g => RunChannelAsync(g.ToArray(), _cts.Token))
+        _writePipes = _channelGroups
+            .Select(_ => Channel.CreateBounded<PendingWrite>(
+                new BoundedChannelOptions(32) { FullMode = BoundedChannelFullMode.Wait }))
+            .ToArray();
+
+        _channelTasks = _channelGroups
+            .Select((devices, index) => RunChannelAsync(devices, _writePipes[index], _cts.Token))
             .ToArray();
 
         return Task.CompletedTask;
@@ -91,9 +124,20 @@ public sealed class PollingEngine
         foreach (var tag in _config.Tags)
             if (tag.InitValue.HasValue && internalDeviceIds.Contains(tag.DeviceId))
                 _tagTable.Write(tag.Id, new TagValue(tag.InitValue.Value, timestamp, Quality.Good));
+
+        // персистентные теги восстанавливаются поверх InitValue (ТЗ §14.6):
+        // записанное оператором значение переживает перезапуск службы
+        if (_persistence is not null)
+        {
+            var persisted = _persistence.Load();
+            foreach (var tag in _config.Tags)
+                if (tag.IsPersistent && persisted.TryGetValue(tag.Name, out double value))
+                    _tagTable.Write(tag.Id, new TagValue(value, timestamp, Quality.Good));
+        }
     }
 
-    private async Task RunChannelAsync(DeviceDefinition[] devices, CancellationToken ct)
+    private async Task RunChannelAsync(DeviceDefinition[] devices,
+        Channel<PendingWrite> writePipe, CancellationToken ct)
     {
         // состояние на устройство: теги, переиспользуемый буфер, драйвер и backoff
         var states = devices.Select(d =>
@@ -115,6 +159,10 @@ public sealed class PollingEngine
             using var timer = new PeriodicTimer(_pollPeriod);
             while (await timer.WaitForNextTickAsync(ct))
             {
+                // команды записи — до опроса: тот же тик подтвердит значения
+                while (writePipe.Reader.TryRead(out var write))
+                    await ExecuteWriteAsync(write, states, ct);
+
                 foreach (var state in states)
                 {
                     // устройство отключено — ждём своего времени и пробуем снова (§4.2)
@@ -161,6 +209,10 @@ public sealed class PollingEngine
         {
             foreach (var state in states)
                 await DropDriverAsync(state, scheduleReconnect: false);
+
+            // неисполненные записи не должны висеть до таймаута после остановки
+            while (writePipe.Reader.TryRead(out var write))
+                write.CompleteAll(new TagWriteResult(TagWriteStatus.Failed, "служба останавливается"));
         }
     }
 

@@ -33,6 +33,11 @@ public class TagDefinition
     public string Units { get; set; } = "";
     public bool IsWritable { get; set; }
 
+    /// <summary>Любая запись в этот тег требует подтверждения в UI (M7).
+    /// Страховка опасной точки: наследуется всеми элементами схемы,
+    /// элемент может переопределить своим Confirmation (Auto|Always|Never).</summary>
+    public bool RequiresWriteConfirmation { get; set; }
+
     public double? InitValue { get; set; }
     public bool IsPersistent { get; set; }
 

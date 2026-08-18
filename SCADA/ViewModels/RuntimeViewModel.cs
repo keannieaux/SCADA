@@ -1,5 +1,4 @@
 using CommunityToolkit.Mvvm.ComponentModel;
-using SCADA.Views;
 
 namespace SCADA.ViewModels;
 
@@ -12,5 +11,6 @@ public partial class RuntimeViewModel: ViewModelBase
     {
         TagsViewModel=tagsViewModel;
         SchemesViewModel = schemesViewModel;
+        SchemesViewModel.Canvas.StartLive();
     }
 }

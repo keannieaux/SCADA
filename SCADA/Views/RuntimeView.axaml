@@ -11,7 +11,7 @@ Background="{DynamicResource Bg0Brush}">
     <Grid RowDefinitions="*,Auto">
 
     <Border Grid.Row="0" Background="{DynamicResource Bg0Brush}">
-        <ContentControl Content="{Binding SchemesViewModel.Canvas}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+        <ContentControl Content="{Binding SchemesViewModel.Canvas}"/>
     </Border>
 
     <Border Grid.Row="1" Height="220" Background="{DynamicResource Bg1Brush}"

@@ -2,6 +2,7 @@ using SCADA.Alarms;
 using SCADA.Core.Tags;
 using SCADA.Runtime.Alarms;
 using SCADA.Runtime.Historian;
+using SCADA.Runtime.Polling;
 using SCADA.Runtime.TagTable;
 
 namespace SCADA.Runtime.Runtime;
@@ -19,6 +20,7 @@ public sealed class LocalRuntimeClient : IRuntimeClient
     private readonly IAlarmEngine? _alarmEngine;
     private readonly IEventJournal? _eventJournal;
     private readonly AlarmChangeBroadcaster? _alarmBroadcaster;
+    private readonly PollingEngine? _pollingEngine;
 
     /// <param name="historian">
     /// null, если архив выключен: тогда запросы истории отдают пустые ряды,
@@ -28,13 +30,18 @@ public sealed class LocalRuntimeClient : IRuntimeClient
     /// null, если сигнализация не настроена: методы аварий отдают пустые
     /// результаты. Тот же принцип, что у <paramref name="historian"/>.
     /// </param>
+    /// <param name="pollingEngine">
+    /// null, если записи в устройства нет (чтение-only сценарии): WriteTagsAsync
+    /// отдаёт отказ, а не падает.
+    /// </param>
     public LocalRuntimeClient(
         ITagTable tagTable,
         IHistorian? historian = null,
         HistoryQueryLimits? limits = null,
         IAlarmEngine? alarmEngine = null,
         IEventJournal? eventJournal = null,
-        AlarmChangeBroadcaster? alarmBroadcaster = null)
+        AlarmChangeBroadcaster? alarmBroadcaster = null,
+        PollingEngine? pollingEngine = null)
     {
         _tagTable = tagTable;
         _historian = historian;
@@ -42,6 +49,7 @@ public sealed class LocalRuntimeClient : IRuntimeClient
         _alarmEngine = alarmEngine;
         _eventJournal = eventJournal;
         _alarmBroadcaster = alarmBroadcaster;
+        _pollingEngine = pollingEngine;
     }
 
     public TagValue Read(TagId id) => _tagTable.Read(id);
@@ -59,6 +67,20 @@ public sealed class LocalRuntimeClient : IRuntimeClient
 
     public void WriteLocal(TagId id, double value)
         => _tagTable.Write(id, new TagValue(value, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), Quality.Good));
+
+    public async ValueTask<IReadOnlyList<TagWriteResult>> WriteTagsAsync(
+        IReadOnlyList<TagWriteItem> items, string requestedBy, CancellationToken ct = default)
+    {
+        // без движка опроса записывать некуда — внятный отказ, а не падение
+        if (_pollingEngine is null)
+            return items.Select(_ => new TagWriteResult(
+                TagWriteStatus.Failed, "движок опроса не подключён")).ToArray();
+        return await _pollingEngine.WriteTagsAsync(items, requestedBy, ct);
+    }
+
+    public async ValueTask<TagWriteResult> WriteTagAsync(
+        TagId tag, double value, string requestedBy, CancellationToken ct = default)
+        => (await WriteTagsAsync([new TagWriteItem(tag, value)], requestedBy, ct))[0];
 
     public async ValueTask<HistorySeries[]> ReadHistoryAsync(
         IReadOnlyList<TagId> ids, long fromMs, long toMs,

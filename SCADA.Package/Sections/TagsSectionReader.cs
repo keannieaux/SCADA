@@ -57,6 +57,8 @@ public static class TagsSectionReader
             tag.IsArchived = reader.ReadBoolean();
             tag.Precision = ReadNullableInt(reader);
         }
+        if (stream.Position < recordEnd)
+            tag.RequiresWriteConfirmation = reader.ReadBoolean();
 
         // хвост записи (поля более нового формата) пропускаем
         stream.Position = recordEnd;

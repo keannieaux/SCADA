@@ -51,6 +51,8 @@ public static class TagsSectionWriter
             // M4: поля архивирования — в хвосте записи
             record.Write(tag.IsArchived);
             WriteNullableInt(record, tag.Precision);
+            // M7: подтверждение записи — в хвосте записи
+            record.Write(tag.RequiresWriteConfirmation);
             record.Flush();
         }
 

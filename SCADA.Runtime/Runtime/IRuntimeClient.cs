@@ -9,11 +9,9 @@ namespace SCADA.Runtime.Runtime;
 /// Local-реализация работает с TagTable в памяти,
 /// remote-реализация (в будущем) ходит на сервер по gRPC — UI не меняется.
 /// </summary>
-public interface IRuntimeClient
+public interface IRuntimeClient : ITagValueReader
 {
     // --- чтение ---
-
-    TagValue Read(TagId id);
 
     // Пакетное чтение: мнемосхема на каждый кадр читает сотни тегов.
     // По одному вызову на тег в remote-варианте это были бы сотни сетевых запросов —

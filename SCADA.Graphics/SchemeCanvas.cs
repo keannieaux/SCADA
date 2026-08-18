@@ -4,6 +4,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using SCADA.Core.Tags;
 using SCADA.Expressions;
+using SCADA.Runtime.Runtime;
 using SkiaSharp;
 using System.Diagnostics;
 using Avalonia.Input;
@@ -12,8 +13,10 @@ namespace SCADA.Graphics;
 
 public sealed class SchemeCanvas : Control
 {
+    private const string RequestedBy = "os-user@station"; // заглушка до M7-авторизации в UI
+
     private readonly SchemeElementRuntime[] _runtime;
-    private readonly ITagTable _tagTable;
+    private readonly IRuntimeClient _runtimeClient;
     private readonly TagId[] _changedBuffer;
     private readonly bool[] _changedSet;
     private bool _blinkPhase;
@@ -25,20 +28,18 @@ public sealed class SchemeCanvas : Control
     private double _dragStartPanX;
     private double _dragStartPanY;
     private Point _pointerDownPosition;
-private bool _pointerMoved;
-
+    private bool _pointerMoved;
 
     private long _lastEpoch=-1;
 
-    public SchemeCanvas(IReadOnlyList<CompiledSchemeElement> elements, ITagTable tagTable, int tagCount)
+    public SchemeCanvas(IReadOnlyList<CompiledSchemeElement> elements, IRuntimeClient runtimeClient, int tagCount)
     {
         _runtime=elements.Select(e=>new SchemeElementRuntime(e)).ToArray();
-        _tagTable=tagTable;
+        _runtimeClient=runtimeClient;
         _changedBuffer=new TagId[tagCount];
         _changedSet=new bool[tagCount];
 
         RecomputeAll();
-
     }
 
     public void StartLive()
@@ -51,130 +52,6 @@ private bool _pointerMoved;
         blinkTimer.Tick+=(_,_)=>BlinkTick();
         blinkTimer.Start();
     }
-
-    protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
-{
-    base.OnPointerWheelChanged(e);
-
-    var pointer=e.GetPosition(this);
-    double oldZoom=_zoom;
-    double newZoom=Math.Clamp(_zoom*(e.Delta.Y>0 ? 1.1 : 1/1.1), 0.1, 10);
-
-    _panX=pointer.X-(pointer.X-_panX)*(newZoom/oldZoom);
-    _panY=pointer.Y-(pointer.Y-_panY)*(newZoom/oldZoom);
-    _zoom=newZoom;
-
-    InvalidateVisual();
-    e.Handled=true;
-}
-
-protected override void OnPointerPressed(PointerPressedEventArgs e)
-{
-    base.OnPointerPressed(e);
-
-    if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
-    {
-        _isDragging=true;
-        _dragStart=e.GetPosition(this);
-        _dragStartPanX=_panX;
-        _dragStartPanY=_panY;
-                _pointerDownPosition=_dragStart;
-        _pointerMoved=false;
-
-        e.Pointer.Capture(this);
-    }
-}
-
-protected override void OnPointerMoved(PointerEventArgs e)
-{
-    base.OnPointerMoved(e);
-
-    if (!_isDragging)
-        return;
-
-    var current=e.GetPosition(this);
-
-    double moveDx=current.X-_pointerDownPosition.X;
-    double moveDy=current.Y-_pointerDownPosition.Y;
-    if (moveDx*moveDx+moveDy*moveDy>16)
-        _pointerMoved=true;
-
-    _panX=_dragStartPanX+(current.X-_dragStart.X);
-    _panY=_dragStartPanY+(current.Y-_dragStart.Y);
-    InvalidateVisual();
-}
-
-protected override void OnPointerReleased(PointerReleasedEventArgs e)
-{
-    base.OnPointerReleased(e);
-
-    if (_isDragging)
-    {
-        _isDragging=false;
-        e.Pointer.Capture(null);
-
-        if (!_pointerMoved)
-            _ = HandleClick(e.GetPosition(this));
-    }
-}
-
-private async Task HandleClick(Point screenPoint)
-{
-    double schemeX=(screenPoint.X-_panX)/_zoom;
-    double schemeY=(screenPoint.Y-_panY)/_zoom;
-    var point=new Point(schemeX, schemeY);
-
-    for (int i=_runtime.Length-1; i>=0; i--)
-    {
-        var runtime=_runtime[i];
-        if (runtime.Compiled.OnClick is not { Count: > 0 } actions)
-            continue;
-
-        var source=runtime.Compiled.Source;
-        var bounds=new Rect(source.X+runtime.OffsetX, source.Y+runtime.OffsetY, source.Width, source.Height);
-
-        if (bounds.Contains(point))
-        {
-            await ExecuteActions(actions);
-            return;
-        }
-    }
-}
-
-private async Task ExecuteActions(IReadOnlyList<CompiledSchemeAction> actions)
-{
-    var owner=TopLevel.GetTopLevel(this) as Window;
-
-    foreach (var action in actions)
-    {
-        switch (action)
-        {
-            case CompiledWriteTagAction write:
-                _tagTable.Write(write.TagId, new TagValue(write.Value, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), Quality.Good));
-                break;
-
-            case CompiledToggleTagAction toggle:
-                double current=_tagTable.Read(toggle.TagId).Value;
-                _tagTable.Write(toggle.TagId, new TagValue(current==0 ? 1 : 0, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), Quality.Good));
-                break;
-
-            case CompiledShowDialogAction dialog when owner is not null:
-                await SchemeDialogs.ShowMessage(owner, dialog.Message);
-                break;
-
-            case CompiledConfirmAction confirm when owner is not null:
-                bool confirmed=await SchemeDialogs.ShowConfirm(owner, confirm.Message);
-                if (!confirmed)
-                    return;
-                break;
-
-            case CompiledOpenSchemeAction openScheme:
-                Debug.WriteLine($"OpenScheme('{openScheme.SchemeName}') — переключение схем пока не реализовано");
-                break;
-        }
-    }
-}
-
 
     private void BlinkTick()
     {
@@ -192,45 +69,175 @@ private async Task ExecuteActions(IReadOnlyList<CompiledSchemeAction> actions)
             InvalidateVisual();
     }
 
-    private void Tick()
-{
-    long epoch=_tagTable.CurrentEpoch;
-    if(epoch==_lastEpoch)
-        return;
-
-    int count=_tagTable.GetChangedSince(_lastEpoch,_changedBuffer);
-    _lastEpoch=epoch;
-    int effectiveCount=Math.Min(count,_changedBuffer.Length);
-
-    for(int i=0;i<effectiveCount;i++)
-        _changedSet[_changedBuffer[i].Value]=true;
-
-    var evalContext=new EvaluationContext{Tags=_tagTable};
-    int dirtyCount=0;
-
-    var sw=Stopwatch.StartNew();
-    foreach(var element in _runtime)
+    protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
-        if (!IsDirty(element.Compiled, _changedSet))
-            continue;
+        base.OnPointerWheelChanged(e);
 
-        Recompute(element,evalContext);
-        dirtyCount++;
-    }
-    sw.Stop();
-    Debug.WriteLine($"Tick: {sw.Elapsed.TotalMilliseconds:F2} мс, пересчитано {dirtyCount} из {_runtime.Length}");
+        var pointer=e.GetPosition(this);
+        double oldZoom=_zoom;
+        double newZoom=Math.Clamp(_zoom*(e.Delta.Y>0 ? 1.1 : 1/1.1), 0.1, 10);
 
-    for(int i =0;i<effectiveCount;i++)
-        _changedSet[_changedBuffer[i].Value]=false;
+        _panX=pointer.X-(pointer.X-_panX)*(newZoom/oldZoom);
+        _panY=pointer.Y-(pointer.Y-_panY)*(newZoom/oldZoom);
+        _zoom=newZoom;
 
-    if(dirtyCount>0)
         InvalidateVisual();
-}
+        e.Handled=true;
+    }
 
+    protected override void OnPointerPressed(PointerPressedEventArgs e)
+    {
+        base.OnPointerPressed(e);
+
+        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            _isDragging=true;
+            _dragStart=e.GetPosition(this);
+            _dragStartPanX=_panX;
+            _dragStartPanY=_panY;
+            _pointerDownPosition=_dragStart;
+            _pointerMoved=false;
+
+            e.Pointer.Capture(this);
+        }
+    }
+
+    protected override void OnPointerMoved(PointerEventArgs e)
+    {
+        base.OnPointerMoved(e);
+
+        if (!_isDragging)
+            return;
+
+        var current=e.GetPosition(this);
+
+        double moveDx=current.X-_pointerDownPosition.X;
+        double moveDy=current.Y-_pointerDownPosition.Y;
+        if (moveDx*moveDx+moveDy*moveDy>16)
+            _pointerMoved=true;
+
+        _panX=_dragStartPanX+(current.X-_dragStart.X);
+        _panY=_dragStartPanY+(current.Y-_dragStart.Y);
+        InvalidateVisual();
+    }
+
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        base.OnPointerReleased(e);
+
+        if (_isDragging)
+        {
+            _isDragging=false;
+            e.Pointer.Capture(null);
+
+            if (!_pointerMoved)
+                _ = HandleClick(e.GetPosition(this));
+        }
+    }
+
+    private async Task HandleClick(Point screenPoint)
+    {
+        double schemeX=(screenPoint.X-_panX)/_zoom;
+        double schemeY=(screenPoint.Y-_panY)/_zoom;
+        var point=new Point(schemeX, schemeY);
+
+        for (int i=_runtime.Length-1; i>=0; i--)
+        {
+            var runtime=_runtime[i];
+            if (runtime.Compiled.OnClick is not { Count: > 0 } actions)
+                continue;
+
+            var source=runtime.Compiled.Source;
+            var bounds=new Rect(source.X+runtime.OffsetX, source.Y+runtime.OffsetY, source.Width, source.Height);
+
+            if (bounds.Contains(point))
+            {
+                await ExecuteActions(actions);
+                return;
+            }
+        }
+    }
+
+    private async Task ExecuteActions(IReadOnlyList<CompiledSchemeAction> actions)
+    {
+        var owner=TopLevel.GetTopLevel(this) as Window;
+
+        foreach (var action in actions)
+        {
+            switch (action)
+            {
+                case CompiledWriteTagAction write:
+                {
+                    var result=await _runtimeClient.WriteTagAsync(write.TagId, write.Value, RequestedBy);
+                    if (result.Status!=TagWriteStatus.Ok)
+                        Debug.WriteLine($"WriteTag({write.TagId.Value}): {result.Status} {result.Error}");
+                    break;
+                }
+
+                case CompiledToggleTagAction toggle:
+                {
+                    double current=_runtimeClient.Read(toggle.TagId).Value;
+                    var result=await _runtimeClient.WriteTagAsync(toggle.TagId, current==0 ? 1 : 0, RequestedBy);
+                    if (result.Status!=TagWriteStatus.Ok)
+                        Debug.WriteLine($"ToggleTag({toggle.TagId.Value}): {result.Status} {result.Error}");
+                    break;
+                }
+
+                case CompiledShowDialogAction dialog when owner is not null:
+                    await SchemeDialogs.ShowMessage(owner, dialog.Message);
+                    break;
+
+                case CompiledConfirmAction confirm when owner is not null:
+                    bool confirmed=await SchemeDialogs.ShowConfirm(owner, confirm.Message);
+                    if (!confirmed)
+                        return;
+                    break;
+
+                case CompiledOpenSchemeAction openScheme:
+                    Debug.WriteLine($"OpenScheme('{openScheme.SchemeName}') — переключение схем пока не реализовано");
+                    break;
+            }
+        }
+    }
+
+    private void Tick()
+    {
+        long epoch=_runtimeClient.CurrentEpoch;
+        if(epoch==_lastEpoch)
+            return;
+
+        int count=_runtimeClient.GetChangedSince(_lastEpoch,_changedBuffer);
+        _lastEpoch=epoch;
+        int effectiveCount=Math.Min(count,_changedBuffer.Length);
+
+        for(int i=0;i<effectiveCount;i++)
+            _changedSet[_changedBuffer[i].Value]=true;
+
+        var evalContext=new EvaluationContext{Tags=_runtimeClient};
+        int dirtyCount=0;
+
+        var sw=Stopwatch.StartNew();
+        foreach(var element in _runtime)
+        {
+            if (!IsDirty(element.Compiled, _changedSet))
+                continue;
+
+            Recompute(element,evalContext);
+            dirtyCount++;
+        }
+        sw.Stop();
+        Debug.WriteLine($"Tick: {sw.Elapsed.TotalMilliseconds:F2} мс, пересчитано {dirtyCount} из {_runtime.Length}");
+
+        for(int i =0;i<effectiveCount;i++)
+            _changedSet[_changedBuffer[i].Value]=false;
+
+        if(dirtyCount>0)
+            InvalidateVisual();
+    }
 
     private void RecomputeAll()
     {
-        var evalContext=new EvaluationContext{Tags=_tagTable};
+        var evalContext=new EvaluationContext{Tags=_runtimeClient};
         foreach(var element in _runtime)
             Recompute(element,evalContext);
     }
@@ -338,10 +345,8 @@ private async Task ExecuteActions(IReadOnlyList<CompiledSchemeAction> actions)
                 SymbolPath: source.SymbolPath));
         }
 
-                context.Custom(new SchemeDrawOperation(Bounds,visuals,_panX,_panY,_zoom));
-
+        context.Custom(new SchemeDrawOperation(Bounds,visuals,_panX,_panY,_zoom));
     }
-
 
     private static SKColor EvaluateFill(CompiledSchemeElement element, EvaluationContext context)
     {

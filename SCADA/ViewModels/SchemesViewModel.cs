@@ -1,15 +1,15 @@
-using SCADA.Core.Tags;
+using SCADA.Runtime.Runtime;
 using SCADA.Graphics;
 
 namespace SCADA.ViewModels;
 
 public sealed class SchemesViewModel : ViewModelBase
 {
-    private const bool UseLoadTestScheme = false; // включить обратно для повторной нагрузочной проверки
+    private const bool UseLoadTestScheme = false;
 
     public SchemeCanvas Canvas {get;}
 
-    public SchemesViewModel(ProjectConfiguration config, ITagTable tagTable)
+    public SchemesViewModel(ProjectConfiguration config, IRuntimeClient runtimeClient)
     {
         var scheme = UseLoadTestScheme
             ? SyntheticSchemeGenerator.Generate(500, ["Temperature", "Pressure", "PumpRunning", "Setpoint"])
@@ -107,6 +107,6 @@ public sealed class SchemesViewModel : ViewModelBase
         var catalog=new ProjectTagCatalog(config);
         var elements=SchemeLoader.Compile(scheme,catalog);
 
-        Canvas =new SchemeCanvas(elements, tagTable, config.Tags.Count);
+        Canvas = new SchemeCanvas(elements, runtimeClient, config.Tags.Count);
     }
 }

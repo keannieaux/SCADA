@@ -1,15 +1,17 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+using SCADA.Runtime.Runtime;
 
 namespace SCADA.ViewModels;
 
-public partial class RuntimeViewModel: ViewModelBase
+public sealed class RuntimeViewModel : ViewModelBase
 {
-    public TagsViewModel TagsViewModel{ get; }
+    public TagsViewModel TagsViewModel { get; }
     public SchemesViewModel SchemesViewModel { get; }
+    public RuntimeHost Host { get; }
 
-    public RuntimeViewModel(TagsViewModel tagsViewModel, SchemesViewModel schemesViewModel)
+    public RuntimeViewModel(RuntimeHost host, TagsViewModel tagsViewModel, SchemesViewModel schemesViewModel)
     {
-        TagsViewModel=tagsViewModel;
+        Host = host;
+        TagsViewModel = tagsViewModel;
         SchemesViewModel = schemesViewModel;
         SchemesViewModel.Canvas.StartLive();
     }

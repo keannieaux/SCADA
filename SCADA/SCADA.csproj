@@ -10,6 +10,10 @@
         <ProjectReference Include="..\SCADA.Runtime\SCADA.Runtime.csproj" />
         <ProjectReference Include="..\SCADA.Graphics\SCADA.Graphics.csproj"/>
         <ProjectReference Include="..\SCADA.Drivers.Simulator\SCADA.Drivers.Simulator.csproj"/>
+        <ProjectReference Include="..\SCADA.Drivers.Modbus\SCADA.Drivers.Modbus.csproj" />
+        <ProjectReference Include="..\SCADA.Package.Builder\SCADA.Package.Builder.csproj" />
+        <ProjectReference Include="..\SCADA.Package\SCADA.Package.csproj" />
+
         <None Include="TestProject\**" CopyToOutputDirectory="PreserveNewest" />
         <None Include="Symbols\**" CopyToOutputDirectory="PreserveNewest" />
 

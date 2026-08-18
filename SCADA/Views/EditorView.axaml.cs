@@ -1,5 +1,6 @@
 using Avalonia.Controls;
-using Microsoft.Extensions.DependencyInjection;
+using SCADA.Package.Builder;
+using SCADA.Runtime.Runtime;
 using SCADA.ViewModels;
 
 namespace SCADA.Views;
@@ -16,17 +17,32 @@ public partial class EditorView : UserControl
         {
             if(DataContext is EditorViewModel vm)
             {
-                vm.RunStarted +=OnRunStarted;
-                vm.RunStopped+=OnRunStopped;
+                vm.BuildFailed += OnBuildFailed;
+                vm.RunStarted += OnRunStarted;
+                vm.RunStopped += OnRunStopped;
             }
         };
     }
 
-    private void OnRunStarted()
+    private async void OnBuildFailed(BuildResult result)
     {
-        _runtimeView=Program.Services.GetRequiredService<RuntimeView>();
+        if (TopLevel.GetTopLevel(this) is Window owner)
+            await BuildDiagnosticsDialog.Show(owner, result.Diagnostics);
+    }
+
+    private async void OnRunStarted(RuntimeHost host, ProjectConfiguration config, IReadOnlyList<BuildDiagnostic> diagnostics)
+    {
+        if (diagnostics.Count > 0 && TopLevel.GetTopLevel(this) is Window owner)
+            await BuildDiagnosticsDialog.Show(owner, diagnostics); // предупреждения — не блокируют запуск
+
+        var tagsViewModel = new TagsViewModel(host.Client, config);
+        var schemesViewModel = new SchemesViewModel(config, host.Client);
+        var runtimeViewModel = new RuntimeViewModel(host, tagsViewModel, schemesViewModel);
+
+        _runtimeView = new RuntimeView(runtimeViewModel);
         _runtimeView.Closed += (_, _) =>
         {
+            _ = host.StopAsync();
             if(DataContext is EditorViewModel vm)
                 vm.IsRunning=false;
         };

@@ -241,8 +241,9 @@ x:DataType="vm:EditorViewModel">
             </Border>
 
             <Border Grid.Column="1" Background="{DynamicResource Bg0Brush}">
-                <ContentControl Content="{Binding SchemesViewModel.Canvas}"/>
-            </Border>
+    <TextBlock Text="Холст" HorizontalAlignment="Center" VerticalAlignment="Center" Classes="body"/>
+</Border>
+
 
             <Border Grid.Column="2" Background="{DynamicResource Bg1Brush}"
                     BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,0,0,0">

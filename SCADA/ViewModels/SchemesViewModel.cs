@@ -86,6 +86,20 @@ public sealed class SchemesViewModel : ViewModelBase
                         X=620,Y=170,Width=80,Height=80,
                         SymbolPath=Path.Combine(AppContext.BaseDirectory,"Symbols","pump.svg"),
                         RotationExpression="Pressure*36"
+                    },
+                    new SchemeElement
+                    {
+                        Id=Guid.NewGuid(),
+                        X=740,Y=170,Width=140,Height=60,
+                        ValueExpression="PumpCmd",
+                        WarnThreshold=0.5,
+                        TextExpression="PumpCmd",
+                        TextFormat="F0",
+                        OnClick=
+                        [
+                            new ConfirmAction("Переключить насос?"),
+                            new ToggleTagAction("PumpCmd")
+                        ]
                     }
                 ]
             };

@@ -1,18 +1,19 @@
+using SCADA.Core.Schemes;
 using SCADA.Core.Tags;
 using SCADA.Expressions.Compiler;
 
 namespace SCADA.Graphics;
 
+public sealed record CompiledBinding(
+    int PropertyId,
+    PropertyType Type,
+    CompiledExpression Expression,
+    StopMapping Mapping,
+    IReadOnlyList<Stop>? Stops);
+
 public sealed record CompiledSchemeElement(
     SchemeElement Source,
-    CompiledExpression? Value,
-    CompiledExpression? Visible,
-    CompiledExpression? BlinkWhen,
-    CompiledExpression? Rotation,
-    CompiledExpression? FillLevel,
-    CompiledExpression? Text,
-    CompiledExpression? PositionX,
-    CompiledExpression? PositionY,
-    TagId? QualityTag,
+    IReadOnlyList<CompiledBinding> Bindings,
+    int[] AllTagIndices,
+    bool HasFillBinding,
     IReadOnlyList<CompiledSchemeAction>? OnClick);
-

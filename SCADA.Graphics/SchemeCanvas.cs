@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Threading;
+using SCADA.Core.Schemes;
 using SCADA.Core.Tags;
 using SCADA.Expressions;
 using SCADA.Runtime.Runtime;
@@ -148,29 +149,42 @@ public sealed class SchemeCanvas : Control
                 continue;
 
             var source=runtime.Compiled.Source;
-            var bounds=new Rect(source.X+runtime.OffsetX, source.Y+runtime.OffsetY, source.Width, source.Height);
+            double offsetX=runtime.Get(SchemeProperty.PositionOffsetX).Number;
+            double offsetY=runtime.Get(SchemeProperty.PositionOffsetY).Number;
+            var bounds=new Rect(source.X+offsetX, source.Y+offsetY, source.Width, source.Height);
 
             if (bounds.Contains(point))
             {
-                await ExecuteActions(actions);
+                var context=new EvaluationContext{Tags=_runtimeClient};
+                await ExecuteActions(actions, context);
                 return;
             }
         }
     }
 
-    private async Task ExecuteActions(IReadOnlyList<CompiledSchemeAction> actions)
+    private async Task ExecuteActions(IReadOnlyList<CompiledSchemeAction> actions, EvaluationContext context)
     {
         var owner=TopLevel.GetTopLevel(this) as Window;
 
         foreach (var action in actions)
         {
+            if (action.Condition is { } condition && ExpressionVM.Evaluate(condition.ToExpression(), context)==0)
+                continue;
+
+            if (action.Confirmation is { } message && owner is not null)
+            {
+                bool confirmed=await SchemeDialogs.ShowConfirm(owner, message);
+                if (!confirmed)
+                    continue;
+            }
+
             switch (action)
             {
                 case CompiledWriteTagAction write:
                 {
                     var result=await _runtimeClient.WriteTagAsync(write.TagId, write.Value, RequestedBy);
                     if (result.Status!=TagWriteStatus.Ok)
-                        Debug.WriteLine($"WriteTag({write.TagId.Value}): {result.Status} {result.Error}");
+                        await ReportWriteError(owner, write.TagId, result);
                     break;
                 }
 
@@ -179,7 +193,7 @@ public sealed class SchemeCanvas : Control
                     double current=_runtimeClient.Read(toggle.TagId).Value;
                     var result=await _runtimeClient.WriteTagAsync(toggle.TagId, current==0 ? 1 : 0, RequestedBy);
                     if (result.Status!=TagWriteStatus.Ok)
-                        Debug.WriteLine($"ToggleTag({toggle.TagId.Value}): {result.Status} {result.Error}");
+                        await ReportWriteError(owner, toggle.TagId, result);
                     break;
                 }
 
@@ -187,17 +201,19 @@ public sealed class SchemeCanvas : Control
                     await SchemeDialogs.ShowMessage(owner, dialog.Message);
                     break;
 
-                case CompiledConfirmAction confirm when owner is not null:
-                    bool confirmed=await SchemeDialogs.ShowConfirm(owner, confirm.Message);
-                    if (!confirmed)
-                        return;
-                    break;
-
                 case CompiledOpenSchemeAction openScheme:
                     Debug.WriteLine($"OpenScheme('{openScheme.SchemeName}') — переключение схем пока не реализовано");
                     break;
             }
         }
+    }
+
+        private static async Task ReportWriteError(Window? owner, TagId tagId, TagWriteResult result)
+    {
+        string message=$"Не удалось записать тег {tagId.Value}: {result.Status} {result.Error}";
+        Debug.WriteLine(message);
+        if (owner is not null)
+            await SchemeDialogs.ShowMessage(owner, message);
     }
 
     private void Tick()
@@ -244,81 +260,94 @@ public sealed class SchemeCanvas : Control
 
     private static bool IsDirty(CompiledSchemeElement element, bool[] changedSet)
     {
-        if(element.Value is { } compiled)
-            foreach (int index in compiled.TagIndices)
-                if (changedSet[index])
-                    return true;
+        foreach (int index in element.AllTagIndices)
+            if (changedSet[index])
+                return true;
 
-        if(element.Visible is { } visible)
-            foreach (int index in visible.TagIndices)
-                if(changedSet[index])
-                    return true;
-
-        if(element.BlinkWhen is {} blink)
-            foreach(int index in blink.TagIndices)
-                if(changedSet[index])
-                    return true;
-
-        if(element.Rotation is { } rotation)
-            foreach(int index in rotation.TagIndices)
-                if(changedSet[index])
-                    return true;
-
-        if(element.FillLevel is {} fillLevel)
-            foreach(int index in fillLevel.TagIndices)
-                if(changedSet[index])
-                    return true;
-
-        if(element.Text is {} text)
-            foreach(int index in text.TagIndices)
-                if(changedSet[index])
-                    return true;
-
-        if(element.PositionX is {} positionX)
-            foreach(int index in positionX.TagIndices)
-                if(changedSet[index])
-                    return true;
-
-        if(element.PositionY is {} positionY)
-            foreach(int index in positionY.TagIndices)
-                if(changedSet[index])
-                    return true;
-
-        return element.QualityTag is { } tagId && changedSet[tagId.Value];
+        return false;
     }
 
     private static void Recompute(SchemeElementRuntime element, EvaluationContext context)
     {
-        element.Fill=EvaluateFill(element.Compiled, context);
-        element.QualityBad=element.Compiled.QualityTag is { } tagId
-            && context.Tags.Read(tagId).Quality != Quality.Good;
-        element.Visible=element.Compiled.Visible is not { } visible
-            || ExpressionVM.Evaluate(visible.ToExpression(), context) !=0;
-        element.BlinkActive=element.Compiled.BlinkWhen is { } blink
-            && ExpressionVM.Evaluate(blink.ToExpression(), context)!=0;
-        element.RotationDegrees=element.Compiled.Rotation is {} rotation
-            ? ExpressionVM.Evaluate(rotation.ToExpression(), context)
-            : 0;
-        element.FillLevel=element.Compiled.FillLevel is {} fillLevel
-            ? Math.Clamp(ExpressionVM.Evaluate(fillLevel.ToExpression(), context),0,1)
-            :0;
-        element.DisplayText=EvaluateText(element.Compiled,context);
-        element.OffsetX=element.Compiled.PositionX is {} positionX
-            ? ExpressionVM.Evaluate(positionX.ToExpression(),context)
-            : 0;
-        element.OffsetY=element.Compiled.PositionY is {} positionY
-            ? ExpressionVM.Evaluate(positionY.ToExpression(), context)
-            :0;
+        foreach (var binding in element.Compiled.Bindings)
+        {
+            double raw=ExpressionVM.Evaluate(binding.Expression.ToExpression(), context);
+            element.Set(binding.PropertyId, MapValue(binding, raw, element));
+        }
+
+        element.QualityBad=element.Compiled.AllTagIndices
+            .Any(index => context.Tags.Read(new TagId(index)).Quality != Quality.Good);
+        element.BlinkActive=element.Get(SchemeProperty.Blink).AsBool;
     }
 
-    private static string EvaluateText(CompiledSchemeElement element, EvaluationContext context)
+    private static PropertyValue MapValue(CompiledBinding binding, double raw, SchemeElementRuntime element)
     {
-        if(element.Text is not { } text)
-            return "";
+        if (binding.Mapping!=StopMapping.Direct && binding.Stops is { Count: > 0 } stops)
+            return binding.Mapping==StopMapping.Interpolated
+                ? Interpolate(stops, raw)
+                : PickDiscrete(stops, raw);
 
-        double value=ExpressionVM.Evaluate(text.ToExpression(), context);
-        string formatted=value.ToString(element.Source.TextFormat ?? "F1");
-        return string.IsNullOrEmpty(element.Source.Units) ? formatted : $"{formatted} {element.Source.Units}";
+        return binding.Type switch
+        {
+            PropertyType.Number => PropertyValue.FromNumber(raw),
+            PropertyType.Boolean => PropertyValue.FromBool(raw!=0),
+            PropertyType.Choice => PropertyValue.FromChoice((int)raw),
+            PropertyType.Color => PropertyValue.FromColor((uint)raw),
+            PropertyType.String => PropertyValue.FromString(FormatText(raw, element)),
+            _ => PropertyValue.FromNumber(raw),
+        };
+    }
+
+    private static PropertyValue PickDiscrete(IReadOnlyList<Stop> stops, double raw)
+    {
+        var result=stops[0];
+        foreach (var stop in stops)
+            if (raw>=stop.Input)
+                result=stop;
+        return result.Output;
+    }
+
+        private static PropertyValue Interpolate(IReadOnlyList<Stop> stops, double raw)
+    {
+        if (raw<=stops[0].Input)
+            return stops[0].Output;
+        if (raw>=stops[^1].Input)
+            return stops[^1].Output;
+
+        for (int i=0; i<stops.Count-1; i++)
+        {
+            var a=stops[i];
+            var b=stops[i+1];
+            if (raw>=a.Input && raw<=b.Input)
+            {
+                double t=(raw-a.Input)/(b.Input-a.Input);
+                return a.Output.Type==PropertyType.Color
+                    ? PropertyValue.FromColor(LerpColor(a.Output.Color, b.Output.Color, t))
+                    : PropertyValue.FromNumber(a.Output.Number+(b.Output.Number-a.Output.Number)*t);
+            }
+        }
+
+        return stops[^1].Output;
+    }
+
+    private static uint LerpColor(uint from, uint to, double t)
+    {
+        double LerpChannel(int shift)
+        {
+            double a=(byte)(from>>shift);
+            double b=(byte)(to>>shift);
+            return Math.Round(a+(b-a)*t);
+        }
+
+        return ((uint)LerpChannel(24)<<24) | ((uint)LerpChannel(16)<<16) | ((uint)LerpChannel(8)<<8) | (uint)LerpChannel(0);
+    }
+
+    private static string FormatText(double raw, SchemeElementRuntime element)
+    {
+        string format=element.Get(SchemeProperty.TextFormat).Text ?? "F1";
+        string units=element.Get(SchemeProperty.Units).Text ?? "";
+        string formatted=raw.ToString(format);
+        return string.IsNullOrEmpty(units) ? formatted : $"{formatted} {units}";
     }
 
     public override void Render(DrawingContext context)
@@ -327,39 +356,43 @@ public sealed class SchemeCanvas : Control
 
         foreach (var runtime in _runtime)
         {
-            bool showNow=runtime.Visible && (!runtime.BlinkActive || _blinkPhase);
+            bool visible=runtime.Get(SchemeProperty.Visible).AsBool;
+            bool showNow=visible && (!runtime.BlinkActive || _blinkPhase);
             if(!showNow)
                 continue;
 
             var source=runtime.Compiled.Source;
-            var bounds=new Rect(source.X+runtime.OffsetX,source.Y+runtime.OffsetY,source.Width,source.Height);
+            double offsetX=runtime.Get(SchemeProperty.PositionOffsetX).Number;
+            double offsetY=runtime.Get(SchemeProperty.PositionOffsetY).Number;
+            var bounds=new Rect(source.X+offsetX,source.Y+offsetY,source.Width,source.Height);
+
+            string? symbolPath=source.Kind==ElementKind.Symbol
+                ? ResolveSymbolPath(runtime.Get(SchemeProperty.SymbolName).Text)
+                : null;
+
             visuals.Add(new SchemeElementVisual(
                 Bounds: bounds,
-                Fill: runtime.Fill,
+                Fill: ToSkColor(runtime.Get(SchemeProperty.FillColor)),
                 QualityBad: runtime.QualityBad,
                 Kind: source.Kind,
-                RotationDegrees: runtime.RotationDegrees,
-                HasFillLevel: source.FillLevelExpression is not null,
-                FillLevel: runtime.FillLevel,
-                Text: runtime.DisplayText,
-                SymbolPath: source.SymbolPath));
+                RotationDegrees: runtime.Get(SchemeProperty.Rotation).Number,
+                HasFillLevel: runtime.Compiled.HasFillBinding,
+                FillLevel: runtime.Get(SchemeProperty.FillLevel).Number,
+                Text: runtime.Get(SchemeProperty.Text).Text ?? "",
+                SymbolPath: symbolPath));
         }
 
         context.Custom(new SchemeDrawOperation(Bounds,visuals,_panX,_panY,_zoom));
     }
 
-    private static SKColor EvaluateFill(CompiledSchemeElement element, EvaluationContext context)
+    private static string? ResolveSymbolPath(string? symbolName)
+        => string.IsNullOrEmpty(symbolName)
+            ? null
+            : Path.Combine(AppContext.BaseDirectory, "Symbols", $"{symbolName}.svg");
+
+    private static SKColor ToSkColor(PropertyValue value)
     {
-        var normal=ThemeColors.Resolve("Bg3Color", new SKColor(0x33,0x38,0x3D));
-        if (element.Value is not { } compiled)
-            return normal;
-
-        double value=ExpressionVM.Evaluate(compiled.ToExpression(), context);
-
-        if (value >= element.Source.CritThreshold)
-            return ThemeColors.Resolve("CritColor", new SKColor(0xE5,0x48,0x4D));
-        if(value>=element.Source.WarnThreshold)
-            return ThemeColors.Resolve("WarnColor", new SKColor(0xE8,0xA3,0x3D));
-        return normal;
+        uint argb=value.Color;
+        return new SKColor((byte)(argb>>16), (byte)(argb>>8), (byte)argb, (byte)(argb>>24));
     }
 }

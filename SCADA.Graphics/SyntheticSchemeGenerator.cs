@@ -1,3 +1,5 @@
+using SCADA.Core.Schemes;
+
 namespace SCADA.Graphics;
 
 public static class SyntheticSchemeGenerator
@@ -14,19 +16,31 @@ public static class SyntheticSchemeGenerator
         {
             int col = i % columns;
             int row = i / columns;
+            string tagName = tagNames[i % tagNames.Count];
 
             elements.Add(new SchemeElement
             {
                 Id = Guid.NewGuid(),
-                Kind = i % 2 == 0 ? ShapeKind.Rectangle : ShapeKind.Ellipse,
+                Kind = i % 2 == 0 ? ElementKind.Rectangle : ElementKind.Ellipse,
                 X = col * cellSize,
                 Y = row * cellSize,
                 Width = cellSize - gap,
                 Height = cellSize - gap,
-                ValueExpression = tagNames[i % tagNames.Count],
-                WarnThreshold = 60,
-                CritThreshold = 85,
-                QualityTagName = tagNames[i % tagNames.Count]
+                Bindings =
+                [
+                    new ElementBinding
+                    {
+                        PropertyId = SchemeProperty.FillColor,
+                        Expression = tagName,
+                        Mapping = StopMapping.Discrete,
+                        Stops =
+                        [
+                            new Stop(0, PropertyValue.FromColor(0xFF33383D)),
+                            new Stop(60, PropertyValue.FromColor(0xFFE8A33D)),
+                            new Stop(85, PropertyValue.FromColor(0xFFE5484D)),
+                        ]
+                    },
+                ]
             });
         }
 

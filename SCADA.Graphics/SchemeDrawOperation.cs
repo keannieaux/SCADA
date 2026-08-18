@@ -5,6 +5,7 @@ using Avalonia.Rendering.SceneGraph;
 using Avalonia.Skia;
 using SkiaSharp;
 using System.Diagnostics;
+using SCADA.Core.Schemes;
 
 namespace SCADA.Graphics;
 
@@ -12,7 +13,7 @@ public readonly record struct SchemeElementVisual(
     Rect Bounds,
     SKColor Fill,
     bool QualityBad,
-    ShapeKind Kind,
+    ElementKind Kind,
     double RotationDegrees,
     bool HasFillLevel,
     double FillLevel,
@@ -57,7 +58,7 @@ internal sealed class SchemeDrawOperation(Rect bounds, IReadOnlyList<SchemeEleme
                     using var fillPaint=new SKPaint{Color=item.Fill,IsAntialias=true};
                     canvas.DrawRect(fillRect,fillPaint);
                 }
-                else if(item.Kind==ShapeKind.Symbol && item.SymbolPath is {} path)
+                else if(item.Kind==ElementKind.Symbol && item.SymbolPath is {} path)
                 {
                     var picture=SymbolCache.Load(path);
                     var sourceRect=picture.CullRect;
@@ -74,7 +75,7 @@ internal sealed class SchemeDrawOperation(Rect bounds, IReadOnlyList<SchemeEleme
                 {
                     using var paint=new SKPaint{Color=item.Fill, IsAntialias=true};
 
-                    if(item.Kind==ShapeKind.Ellipse)
+                    if(item.Kind==ElementKind.Ellipse)
                         canvas.DrawOval(rect,paint);
                     else
                         canvas.DrawRect(rect,paint);

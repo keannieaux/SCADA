@@ -1,0 +1,16 @@
+namespace SCADA.Graphics;
+
+public static class SchemeProperty
+{
+    public const int Rotation=2;
+    public const int PositionOffsetX=3;
+    public const int PositionOffsetY=4;
+    public const int Visible=5;
+    public const int Blink=6;
+    public const int Text=7;
+    public const int TextFormat=8;
+    public const int Units=9;
+    public const int FillColor=10;
+    public const int FillLevel=14;
+    public const int SymbolName=30;
+}

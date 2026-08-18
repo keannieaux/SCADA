@@ -1,11 +1,14 @@
 using SCADA.Core.Tags;
+using SCADA.Expressions.Compiler;
 
 namespace SCADA.Graphics;
 
-public abstract record CompiledSchemeAction;
-public sealed record CompiledWriteTagAction(TagId TagId, double Value) : CompiledSchemeAction;
-public sealed record CompiledToggleTagAction(TagId TagId) : CompiledSchemeAction;
-public sealed record CompiledOpenSchemeAction(string SchemeName) : CompiledSchemeAction;
-public sealed record CompiledShowDialogAction(string Message) : CompiledSchemeAction;
-public sealed record CompiledConfirmAction(string Message) : CompiledSchemeAction;
-
+public abstract record CompiledSchemeAction(string? Confirmation, CompiledExpression? Condition);
+public sealed record CompiledWriteTagAction(TagId TagId, double Value, string? Confirmation, CompiledExpression? Condition)
+    : CompiledSchemeAction(Confirmation, Condition);
+public sealed record CompiledToggleTagAction(TagId TagId, string? Confirmation, CompiledExpression? Condition)
+    :CompiledSchemeAction(Confirmation, Condition);
+public sealed record CompiledOpenSchemeAction(string SchemeName, string? Confirmation, CompiledExpression? Condition)
+    :CompiledSchemeAction(Confirmation, Condition);
+public sealed record CompiledShowDialogAction(string Message, string? Confirmation, CompiledExpression? Condition)
+    :CompiledSchemeAction(Confirmation, Condition);

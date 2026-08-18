@@ -3,7 +3,7 @@ using Microsoft.Extensions.Logging;
 using SCADA.Runtime.Polling;
 using SCADA.Core.Tags;
 
-namespace SCADA.Server;
+namespace SCADA.Runtime.Hosting;
 
 /// <summary>
 /// Жизненный цикл опроса внутри хоста: старт движка при запуске,

@@ -6,6 +6,9 @@
     <ProjectReference Include="..\SCADA.Alarms\SCADA.Alarms.csproj" />
     <ProjectReference Include="..\SCADA.Drivers.Abstractions\SCADA.Drivers.Abstractions.csproj" />
     <ProjectReference Include="..\SCADA.Historian\SCADA.Historian.csproj" />
+    <!-- Чтение .scadapkg для пакетного режима RuntimeHost (ТЗ §14.2).
+         SCADA.Package ссылается только на Core+Expressions, цикла нет. -->
+    <ProjectReference Include="..\SCADA.Package\SCADA.Package.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

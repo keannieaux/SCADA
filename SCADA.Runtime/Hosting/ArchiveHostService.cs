@@ -5,7 +5,7 @@ using SCADA.Historian;
 using SCADA.Runtime.Configuration;
 using SCADA.Runtime.Historian;
 
-namespace SCADA.Server;
+namespace SCADA.Runtime.Hosting;
 
 /// <summary>
 /// Жизненный цикл архива внутри хоста: восстановление после аварийного

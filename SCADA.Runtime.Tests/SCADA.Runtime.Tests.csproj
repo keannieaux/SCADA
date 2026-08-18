@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <IsPackable>false</IsPackable>
@@ -17,6 +17,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\SCADA.Runtime\SCADA.Runtime.csproj" />
+    <!-- пакетный режим RuntimeHost: сборка .scadapkg во временную папку -->
+    <ProjectReference Include="..\SCADA.Package.Builder\SCADA.Package.Builder.csproj" />
     <ProjectReference Include="..\SCADA.Drivers.Simulator\SCADA.Drivers.Simulator.csproj" />
   </ItemGroup>
 

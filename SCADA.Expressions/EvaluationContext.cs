@@ -9,7 +9,10 @@ namespace SCADA.Expressions;
 /// </summary>
 public sealed class EvaluationContext
 {
-    public required ITagTable Tags { get; init; }
+    // Тип — намеренно узкий ITagValueReader (один Read): тогда схемы и панели
+    // вычисляют выражения через IRuntimeClient и не зависят от ITagTable —
+    // внутренней таблицы движка, которой нет в remote-варианте (ТЗ §12).
+    public required ITagValueReader Tags { get; init; }
 
     // M5: public IHistorian? Historian { get; init; } — когда появится RateOfChange.
     // IHistorian тогда переедет в Core, как ITagTable, — иначе ссылка зациклится.

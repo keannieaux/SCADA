@@ -1,4 +1,5 @@
 using SCADA.Core.Alarms;
+using SCADA.Core.Schemes;
 using SCADA.Core.Tags;
 using SCADA.Expressions.Compiler;
 using SCADA.Package.Builder.Sections;
@@ -53,6 +54,15 @@ public static class ProjectBuildService
             CompileAlarmRules(config, allExpressions, diagnostics);
             var soundEntries = CollectSoundEntries(config, projectDirectory, diagnostics);
 
+            // схемы и шаблоны (docs/visualization-concept.md §11.4): выражения
+            // привязок и условий действий — в тот же пул code.bin ДО записи;
+            // затем ссылки на теги/шаблоны и ассеты. Все ошибки собираются,
+            // пакет при них не пишется.
+            CompileSchemeExpressions(config, allExpressions, diagnostics);
+            ValidateSchemes(config, diagnostics);
+            var schemeAssetEntries = CollectSchemeAssetEntries(config, projectDirectory,
+                diagnostics);
+
             bool success = !diagnostics.Any(d => d.Severity == BuildSeverity.Error);
             if (success)
             {
@@ -63,6 +73,7 @@ public static class ProjectBuildService
                 writer.AddEntry("code.bin",
                     CodeSectionWriter.Write(allExpressions, out var poolIndices));
                 RemapAlarmExpressionIndices(config, poolIndices);
+                RemapSchemeExpressionIndices(config, poolIndices);
 
                 if (config.Alarms.Rules.Count > 0)
                 {
@@ -70,6 +81,16 @@ public static class ProjectBuildService
                     foreach (var (entry, bytes) in soundEntries)
                         writer.AddEntry(entry, bytes);
                 }
+
+                // схемы и шаблоны — секциями schemes/<имя>.bin / templates/<имя>.bin,
+                // перечисление на чтении — через манифест (§11.1)
+                foreach (var scheme in config.Schemes)
+                    writer.AddEntry($"schemes/{scheme.Name}.bin", SchemeSectionWriter.Write(scheme));
+                foreach (var template in config.Templates)
+                    writer.AddEntry($"templates/{template.Name}.bin",
+                        SchemeSectionWriter.WriteTemplate(template));
+                foreach (var (entry, bytes) in schemeAssetEntries)
+                    writer.AddEntry(entry, bytes);
 
                 writer.Save(outputPath, config.Name, config.Version);
             }
@@ -138,6 +159,406 @@ public static class ProjectBuildService
             if (rule.CompiledExpressionIndex is int input)
                 rule.CompiledExpressionIndex = poolIndices[input];
     }
+
+    /// <summary>
+    /// Компиляция выражений схем и шаблонов (концепт §11.4): привязки
+    /// элементов и условия действий — в общий пул code.bin, как правила
+    /// сигнализации. Дедупликация пула покрывает и «одно выражение → группа
+    /// свойств» (§4.2). Собираются ВСЕ ошибки компиляции, не первая.
+    /// Выражения шаблонов компилируются через каталог с параметрами:
+    /// параметрическая ссылка получает индекс-заглушку -1, реальный TagId
+    /// подставляется при раскрытии экземпляра в рантайме (§7, B2).
+    /// </summary>
+    private static void CompileSchemeExpressions(ProjectConfiguration config,
+        List<CompiledExpression> pool, List<BuildDiagnostic> diagnostics)
+    {
+        if (config.Schemes.Count == 0 && config.Templates.Count == 0)
+            return;
+
+        var catalog = new BuilderTagCatalog(config.Tags);
+        foreach (var scheme in config.Schemes)
+        {
+            CompileEventConditions(scheme.Events, scheme.Name, "событие экрана",
+                catalog, pool, diagnostics);
+            CompileSchemeElements(scheme.Name, scheme.Elements, catalog, pool, diagnostics);
+        }
+        foreach (var template in config.Templates)
+        {
+            var templateCatalog = new TemplateParameterCatalog(template, catalog);
+            CompileEventConditions(template.Events, template.Name, "событие шаблона",
+                templateCatalog, pool, diagnostics);
+            CompileSchemeElements(template.Name, template.Elements,
+                templateCatalog, pool, diagnostics);
+        }
+    }
+
+    private static void CompileSchemeElements(string schemeName,
+        IReadOnlyList<SchemeElement> elements, ITagCatalog catalog,
+        List<CompiledExpression> pool, List<BuildDiagnostic> diagnostics)
+    {
+        for (int i = 0; i < elements.Count; i++)
+        {
+            var element = elements[i];
+            string label = ElementLabel(element, i);
+
+            foreach (var binding in element.Bindings)
+            {
+                try
+                {
+                    CompiledExpression compiled =
+                        ExpressionCompiler.Compile(binding.Expression, catalog);
+                    binding.CompiledExpressionIndex = pool.Count; // до дедупликации
+                    binding.CompiledTagIndices = compiled.TagIndices;
+                    pool.Add(compiled);
+                }
+                catch (ExpressionCompileException ex)
+                {
+                    diagnostics.Add(new BuildDiagnostic(BuildSeverity.Error,
+                        $"scheme:{schemeName}",
+                        $"Схема '{schemeName}', элемент {label}, привязка свойства " +
+                        $"{binding.PropertyId}: {ex.Message}"));
+                }
+            }
+
+            CompileEventConditions(element.Events, schemeName, $"элемент {label}",
+                catalog, pool, diagnostics);
+        }
+    }
+
+    /// <summary>Компиляция условий действий списка событий (уровень экрана или
+    /// элемента — общий механизм, §5.2).</summary>
+    private static void CompileEventConditions(IReadOnlyList<SchemeEvent> events,
+        string schemeName, string context, ITagCatalog catalog,
+        List<CompiledExpression> pool, List<BuildDiagnostic> diagnostics)
+    {
+        foreach (var schemeEvent in events)
+            foreach (var action in schemeEvent.Actions)
+            {
+                if (action.Condition is null)
+                    continue;
+                try
+                {
+                    CompiledExpression compiled =
+                        ExpressionCompiler.Compile(action.Condition, catalog);
+                    action.CompiledConditionIndex = pool.Count; // до дедупликации
+                    action.CompiledConditionTagIndices = compiled.TagIndices;
+                    pool.Add(compiled);
+                }
+                catch (ExpressionCompileException ex)
+                {
+                    diagnostics.Add(new BuildDiagnostic(BuildSeverity.Error,
+                        $"scheme:{schemeName}",
+                        $"Схема '{schemeName}', {context}, условие действия: " +
+                        $"{ex.Message}"));
+                }
+            }
+    }
+
+    /// <summary>Перевод индексов выражений привязок и условий действий
+    /// в итоговую таблицу пула после дедупликации.</summary>
+    private static void RemapSchemeExpressionIndices(ProjectConfiguration config, int[] poolIndices)
+    {
+        foreach (var scheme in config.Schemes)
+            RemapEventConditions(scheme.Events, poolIndices);
+        foreach (var template in config.Templates)
+            RemapEventConditions(template.Events, poolIndices);
+
+        foreach (var element in AllSchemeElements(config))
+        {
+            foreach (var binding in element.Bindings)
+                if (binding.CompiledExpressionIndex is int input)
+                    binding.CompiledExpressionIndex = poolIndices[input];
+            RemapEventConditions(element.Events, poolIndices);
+        }
+    }
+
+    private static void RemapEventConditions(IReadOnlyList<SchemeEvent> events, int[] poolIndices)
+    {
+        foreach (var schemeEvent in events)
+            foreach (var action in schemeEvent.Actions)
+                if (action.CompiledConditionIndex is int input)
+                    action.CompiledConditionIndex = poolIndices[input];
+    }
+
+    /// <summary>
+    /// Валидация схем при сборке (§11.4): имена (становятся именами секций),
+    /// абсолютные ссылки на теги в действиях, существование шаблонов у
+    /// Instance-элементов, параметры экземпляров по объявлениям шаблона,
+    /// рекурсия шаблонов (§7). Абсолютные ссылки в TagId здесь НЕ резолвятся:
+    /// в пакете действие хранит имя тега, раннее связывание — на стороне
+    /// чтения/рантайма по каталогу проекта (аналог OpenScheme по имени).
+    /// </summary>
+    private static void ValidateSchemes(ProjectConfiguration config,
+        List<BuildDiagnostic> diagnostics)
+    {
+        if (config.Schemes.Count == 0 && config.Templates.Count == 0)
+            return;
+
+        ValidateSchemeNames(config, diagnostics);
+
+        var templatesByName = config.Templates
+            .GroupBy(t => t.Name)
+            .ToDictionary(g => g.Key, g => g.First());
+        var catalog = new BuilderTagCatalog(config.Tags);
+
+        foreach (var scheme in config.Schemes)
+        {
+            ValidateEventTagRefs(scheme.Events, scheme.Name, "событие экрана",
+                templateParameters: null, catalog, diagnostics);
+            ValidateSchemeElements(scheme.Name, scheme.Elements, templatesByName,
+                templateParameters: null, catalog, diagnostics);
+        }
+        foreach (var template in config.Templates)
+        {
+            var templateParameters = template.Parameters.Select(p => p.Name).ToHashSet();
+            ValidateEventTagRefs(template.Events, template.Name, "событие шаблона",
+                templateParameters, catalog, diagnostics);
+            ValidateSchemeElements(template.Name, template.Elements, templatesByName,
+                templateParameters, catalog, diagnostics);
+        }
+
+        ValidateTemplateCycles(templatesByName, diagnostics);
+    }
+
+    /// <summary>Имя схемы/шаблона — имя секции пакета: недопустимые символы
+    /// пути и дубликаты — ошибки сборки.</summary>
+    private static void ValidateSchemeNames(ProjectConfiguration config,
+        List<BuildDiagnostic> diagnostics)
+    {
+        // '/' недопустим дополнительно: в zip-записях это разделитель
+        char[] invalidChars = [..Path.GetInvalidFileNameChars(), '/'];
+
+        void CheckName(string name, string what)
+        {
+            if (string.IsNullOrWhiteSpace(name) || name.IndexOfAny(invalidChars) >= 0)
+                diagnostics.Add(new BuildDiagnostic(BuildSeverity.Error, $"scheme:{name}",
+                    $"Недопустимое имя {what} '{name}': оно становится именем секции пакета"));
+        }
+
+        foreach (var scheme in config.Schemes)
+            CheckName(scheme.Name, "схемы");
+        foreach (var template in config.Templates)
+            CheckName(template.Name, "шаблона");
+
+        foreach (var group in config.Schemes.GroupBy(s => s.Name).Where(g => g.Count() > 1))
+            diagnostics.Add(new BuildDiagnostic(BuildSeverity.Error, $"scheme:{group.Key}",
+                $"Дубликат имени схемы '{group.Key}'"));
+        foreach (var group in config.Templates.GroupBy(t => t.Name).Where(g => g.Count() > 1))
+            diagnostics.Add(new BuildDiagnostic(BuildSeverity.Error, $"scheme:{group.Key}",
+                $"Дубликат имени шаблона '{group.Key}'"));
+    }
+
+    private static void ValidateSchemeElements(string schemeName,
+        IReadOnlyList<SchemeElement> elements,
+        Dictionary<string, SchemeTemplate> templatesByName,
+        HashSet<string>? templateParameters, BuilderTagCatalog catalog,
+        List<BuildDiagnostic> diagnostics)
+    {
+        string source = $"scheme:{schemeName}";
+
+        for (int i = 0; i < elements.Count; i++)
+        {
+            var element = elements[i];
+            string label = ElementLabel(element, i);
+
+            // Instance: шаблон существует, параметры экземпляра объявлены (§7)
+            if (element.Kind == ElementKind.Instance &&
+                !string.IsNullOrEmpty(element.TemplateName))
+            {
+                if (!templatesByName.TryGetValue(element.TemplateName, out var template))
+                {
+                    diagnostics.Add(new BuildDiagnostic(BuildSeverity.Error, source,
+                        $"Схема '{schemeName}', элемент {label}: шаблон " +
+                        $"'{element.TemplateName}' не найден"));
+                }
+                else if (element.TemplateParameters is not null)
+                {
+                    var declared = template.Parameters.Select(p => p.Name).ToHashSet();
+                    foreach (string parameter in element.TemplateParameters.Keys)
+                        if (!declared.Contains(parameter))
+                            diagnostics.Add(new BuildDiagnostic(BuildSeverity.Error, source,
+                                $"Схема '{schemeName}', элемент {label}: параметр " +
+                                $"'{parameter}' не объявлен в шаблоне '{template.Name}'"));
+                }
+            }
+
+            // ссылки на теги в действиях: абсолютные — существуют в каталоге,
+            // параметрические — объявлены в текущем шаблоне (§4.4, §7)
+            ValidateEventTagRefs(element.Events, schemeName, $"элемент {label}",
+                templateParameters, catalog, diagnostics);
+        }
+    }
+
+    /// <summary>Проверка ссылок на теги в действиях списка событий — общая для
+    /// событий элемента и событий уровня экрана/шаблона (§5.1).</summary>
+    private static void ValidateEventTagRefs(IReadOnlyList<SchemeEvent> events,
+        string schemeName, string context, HashSet<string>? templateParameters,
+        BuilderTagCatalog catalog, List<BuildDiagnostic> diagnostics)
+    {
+        string source = $"scheme:{schemeName}";
+
+        foreach (var schemeEvent in events)
+            foreach (var action in schemeEvent.Actions)
+            {
+                var tag = action switch
+                {
+                    WriteTagAction a => a.Tag,
+                    ToggleTagAction a => a.Tag,
+                    _ => (SchemeTagRef?)null
+                };
+                if (tag is not { } tagRef)
+                    continue;
+
+                if (tagRef.IsParametric)
+                {
+                    string head = ParametricHead(tagRef.Name);
+                    if (templateParameters is null)
+                        diagnostics.Add(new BuildDiagnostic(BuildSeverity.Error, source,
+                            $"Схема '{schemeName}', {context}: параметрическая " +
+                            $"ссылка '{tagRef.Name}' вне шаблона"));
+                    else if (!templateParameters.Contains(head))
+                        diagnostics.Add(new BuildDiagnostic(BuildSeverity.Error, source,
+                            $"Шаблон '{schemeName}', {context}: параметр " +
+                            $"'{head}' не объявлен в шаблоне"));
+                }
+                else if (!catalog.TryGetIndex(tagRef.Name, out _))
+                {
+                    diagnostics.Add(new BuildDiagnostic(BuildSeverity.Error, source,
+                        $"Схема '{schemeName}', {context}: тег '{tagRef.Name}' не найден"));
+                }
+            }
+    }
+
+    /// <summary>Рекурсия шаблонов (шаблон включает себя — напрямую или по
+    /// цепочке) — ошибка сборки (§7): иначе раскрытие экземпляра в рантайме
+    /// не завершится. Раскрытие при сборке не выполняется (B2).</summary>
+    private static void ValidateTemplateCycles(
+        Dictionary<string, SchemeTemplate> templatesByName,
+        List<BuildDiagnostic> diagnostics)
+    {
+        var visiting = new List<string>();   // текущий путь DFS (серые)
+        var finished = new HashSet<string>(); // чёрные
+
+        void Visit(string name)
+        {
+            if (finished.Contains(name))
+                return;
+            int cycleStart = visiting.IndexOf(name);
+            if (cycleStart >= 0)
+            {
+                string cycle = string.Join(" → ", visiting.Skip(cycleStart).Append(name));
+                diagnostics.Add(new BuildDiagnostic(BuildSeverity.Error, $"scheme:{name}",
+                    $"Цикл шаблонов: {cycle}"));
+                return;
+            }
+
+            visiting.Add(name);
+            foreach (var element in templatesByName[name].Elements)
+                if (element.Kind == ElementKind.Instance &&
+                    element.TemplateName is not null &&
+                    templatesByName.ContainsKey(element.TemplateName))
+                    Visit(element.TemplateName);
+            visiting.RemoveAt(visiting.Count - 1);
+            finished.Add(name);
+        }
+
+        foreach (string name in templatesByName.Keys)
+            Visit(name);
+    }
+
+    /// <summary>
+    /// Ассеты схем (§11.4): упомянутые элементами символы и картинки обязаны
+    /// существовать в каталоге проекта, иначе ошибка. Копируются ВСЕ файлы
+    /// каталогов symbols/, images/, fonts/ — символы переиспользуются между
+    /// схемами, отслеживать использование каждого файла бессмысленно (§3).
+    /// </summary>
+    private static List<(string Entry, byte[] Bytes)> CollectSchemeAssetEntries(
+        ProjectConfiguration config, string projectDirectory,
+        List<BuildDiagnostic> diagnostics)
+    {
+        var entries = new List<(string, byte[])>();
+        if (config.Schemes.Count == 0 && config.Templates.Count == 0)
+            return entries;
+
+        var referencedSymbols = new HashSet<string>();
+        var referencedImages = new HashSet<string>();
+        foreach (var element in AllSchemeElements(config))
+            foreach (var property in element.Properties)
+            {
+                // свойства ищем по имени дескриптора, а не по id — id стабильны,
+                // но имя читается лучше и переживает перенумерацию реестра
+                var def = ElementSchemas.Find(element.Kind, property.PropertyId);
+                if (def is null || property.Value.Text is not { Length: > 0 } assetName)
+                    continue;
+                if (def.Name == "SymbolName")
+                    referencedSymbols.Add(assetName);
+                else if (def.Name == "ImageName")
+                    referencedImages.Add(assetName);
+            }
+
+        CheckAssetsExist(projectDirectory, "symbols", referencedSymbols, diagnostics);
+        CheckAssetsExist(projectDirectory, "images", referencedImages, diagnostics);
+
+        foreach (string directory in new[] { "symbols", "images", "fonts" })
+        {
+            string fullDirectory = Path.Combine(projectDirectory, directory);
+            if (!Directory.Exists(fullDirectory))
+                continue;
+            foreach (string file in Directory.EnumerateFiles(fullDirectory).Order())
+                entries.Add(($"{directory}/{Path.GetFileName(file)}", File.ReadAllBytes(file)));
+        }
+        return entries;
+    }
+
+    private static void CheckAssetsExist(string projectDirectory, string directory,
+        HashSet<string> referenced, List<BuildDiagnostic> diagnostics)
+    {
+        foreach (string name in referenced.Order())
+            if (!File.Exists(Path.Combine(projectDirectory, directory, name)))
+                diagnostics.Add(new BuildDiagnostic(BuildSeverity.Error, "schemes:assets",
+                    $"Файл '{directory}/{name}', упомянутый на схеме, не найден " +
+                    "в каталоге проекта"));
+    }
+
+    private static IEnumerable<SchemeElement> AllSchemeElements(ProjectConfiguration config)
+        => config.Schemes.SelectMany(s => s.Elements)
+            .Concat(config.Templates.SelectMany(t => t.Elements));
+
+    private static string ElementLabel(SchemeElement element, int index)
+        => element.Name.Length > 0 ? $"'{element.Name}'" : $"#{index}";
+
+    /// <summary>Голова параметрической ссылки: "Prefix.Скорость" → "Prefix"
+    /// (имя параметра шаблона — первый сегмент, §7).</summary>
+    private static string ParametricHead(string name)
+    {
+        int dot = name.IndexOf('.');
+        return dot < 0 ? name : name[..dot];
+    }
+
+    /// <summary>
+    /// Каталог тегов для компиляции выражений шаблона: тег, чей первый
+    /// сегмент — объявленный параметр шаблона, считается параметрической
+    /// ссылкой и получает индекс-заглушку -1 (реальный TagId подставляется
+    /// при раскрытии экземпляра, §7). Остальные имена — в проектный каталог:
+    /// неизвестные по-прежнему ошибка компиляции.
+    /// </summary>
+    private sealed class TemplateParameterCatalog(SchemeTemplate template, ITagCatalog inner)
+        : ITagCatalog
+    {
+        private readonly HashSet<string> _parameters =
+            template.Parameters.Select(p => p.Name).ToHashSet();
+
+        public bool TryGetIndex(string name, out int index)
+        {
+            if (_parameters.Contains(ParametricHead(name)))
+            {
+                index = -1;
+                return true;
+            }
+            return inner.TryGetIndex(name, out index);
+        }
+    }
+
 
     /// <summary>
     /// Звуковые файлы (§2.8) копируются в пакет секциями sounds/&lt;имя&gt; —

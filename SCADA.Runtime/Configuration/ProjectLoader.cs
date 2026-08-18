@@ -31,6 +31,10 @@ public static class ProjectLoader
         if (alarmsFile is not null)
             CheckFormatVersion(alarmsFile.FormatVersion, "alarms.json", errors);
 
+        // схемы и шаблоны из schemes/ templates/ (концепт §3, §7) —
+        // каталоги опциональны; ошибки исходников — в общий список
+        var (schemes, templates) = SchemeFileLoader.Load(projectDirectory, errors);
+
         var config = new ProjectConfiguration
         {
             Name = projectFile.Name,
@@ -46,7 +50,9 @@ public static class ProjectLoader
                     Templates = alarmsFile.Templates,
                     Sound = alarmsFile.Sound,
                     Defaults = alarmsFile.Defaults
-                }
+                },
+            Schemes = schemes,
+            Templates = templates
         };
 
         // правила целостности живут в ProjectValidator — те же, что использует редактор

@@ -29,9 +29,22 @@ public static class PackageProjectLoader
             // M5: секция опциональна — проект без alarms.json собирается без неё
             Alarms = reader.HasEntry("alarms.bin")
                 ? AlarmsSectionReader.Read(reader.ReadEntry("alarms.bin"))
-                : new Core.Alarms.AlarmConfiguration()
+                : new Core.Alarms.AlarmConfiguration(),
+            // схемы и шаблоны опциональны: перечисление через манифест
+            // по префиксу (концепт §11.1), отсутствие — пустые списки
+            Schemes = ReadEntries<Core.Schemes.Scheme>(reader, "schemes/",
+                SchemeSectionReader.ReadScheme),
+            Templates = ReadEntries<Core.Schemes.SchemeTemplate>(reader, "templates/",
+                SchemeSectionReader.ReadTemplate)
         };
     }
+
+    private static List<T> ReadEntries<T>(PackageReader reader, string prefix,
+        Func<byte[], T> read)
+        => reader.Manifest.Entries
+            .Where(e => e.Name.StartsWith(prefix) && e.Name.EndsWith(".bin"))
+            .Select(e => read(reader.ReadEntry(e.Name)))
+            .ToList();
 
     /// <summary>Пул байткода проекта (выражения схем, условия и т.д.).</summary>
     public static CodePool LoadCodePool(PackageReader reader)

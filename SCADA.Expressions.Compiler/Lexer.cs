@@ -72,6 +72,7 @@ public static class Lexer
             '-' => TokenKind.Minus,
             '*' => TokenKind.Star,
             '/' => TokenKind.Slash,
+            '%' => TokenKind.Percent,
             '>' => TokenKind.Greater,
             '<' => TokenKind.Less,
             '!' => TokenKind.Bang,

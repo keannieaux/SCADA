@@ -33,7 +33,7 @@ public sealed class Parser
         TokenKind.Less or TokenKind.LessOrEqual
             or TokenKind.Greater or TokenKind.GreaterOrEqual => 4,
         TokenKind.Plus or TokenKind.Minus => 5,
-        TokenKind.Star or TokenKind.Slash => 6,
+        TokenKind.Star or TokenKind.Slash or TokenKind.Percent => 6,
         _ => 0
     };
 

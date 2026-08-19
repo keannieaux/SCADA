@@ -124,6 +124,7 @@ public static class Emitter
         TokenKind.Minus => OpCode.Sub,
         TokenKind.Star => OpCode.Mul,
         TokenKind.Slash => OpCode.Div,
+        TokenKind.Percent => OpCode.Mod,
         TokenKind.Greater => OpCode.Greater,
         TokenKind.GreaterOrEqual => OpCode.GreaterOrEqual,
         TokenKind.Less => OpCode.Less,

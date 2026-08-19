@@ -322,8 +322,14 @@ public sealed class AlarmEngine : IAlarmEngine
     {
         if (rt.Rule.Type == AlarmType.Expression)
         {
+            // время заполняем и здесь: правила могут пользоваться now()
+            // (например, «условие держится дольше смены»), семантика та же, что на схемах
             bool cond = ExpressionVM.Evaluate(rt.Condition!,
-                new EvaluationContext { Tags = _tags }) != 0.0;
+                new EvaluationContext
+                {
+                    Tags = _tags,
+                    NowUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                }) != 0.0;
             return (cond, null);
         }
 

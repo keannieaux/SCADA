@@ -108,4 +108,14 @@ public class CompilerIntegrationTests
         Assert.Throws<ExpressionCompileException>(
             () => ExpressionCompiler.Compile("Boiler1.Tmp > 80", Catalog()));
     }
+
+    [Fact]
+    public void NowFunction_CompilesAndEvaluates()
+    {
+        // now() — текущее время в секундах из контекста (B0.4: анимации от времени)
+        var compiled = ExpressionCompiler.Compile("now() * 90 % 360", Catalog());
+
+        var context = new EvaluationContext { Tags = Table(), NowUnixMs = 10_000 };
+        Assert.Equal(900.0 % 360.0, ExpressionVM.Evaluate(compiled.ToExpression(), context));
+    }
 }

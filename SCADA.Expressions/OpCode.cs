@@ -28,5 +28,6 @@ public enum OpCode : byte
     JumpIfFalse,
     Jump,
     Return,
-    CallBuiltin   // операнды: 1 байт — id функции, 1 байт — число аргументов
+    CallBuiltin,  // операнды: 4 байта — id функции, 1 байт — число аргументов
+    Mod           // остаток: now() * 90 % 360 и прочие циклические анимации
 }

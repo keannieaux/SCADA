@@ -1,3 +1,4 @@
+using SCADA.Core.Schemes;
 using SCADA.Runtime.Runtime;
 using SCADA.Graphics;
 
@@ -15,90 +16,166 @@ public sealed class SchemesViewModel : ViewModelBase
             ? SyntheticSchemeGenerator.Generate(500, ["Temperature", "Pressure", "PumpRunning", "Setpoint"])
             : new Scheme
             {
-                Id=Guid.NewGuid(),
-                Name="Тест",
-                Elements=
+                Id = Guid.NewGuid(),
+                Name = "Тест",
+                Elements =
                 [
                     new SchemeElement
                     {
-                        Id=Guid.NewGuid(),
-                        X=20,Y=20, Width=200, Height=120,
-                        ValueExpression="Temperature",
-                        WarnThreshold=60,
-                        CritThreshold=85,
-                        QualityTagName="Temperature"
-                    },
-                    new SchemeElement
-                    {
-                        Id=Guid.NewGuid(),
-                        Kind=ShapeKind.Ellipse,
-                        X=260,Y=20,Width=150,Height=150,
-                        ValueExpression="Pressure",
-                        WarnThreshold=6,
-                        CritThreshold=8.5,
-                        QualityTagName="Pressure"
-                    },
-                    new SchemeElement
-                    {
-                        Id=Guid.NewGuid(),
-                        Kind=ShapeKind.Ellipse,
-                        X=440,Y=70,Width=30,Height=30,
-                        VisibleExpression="Temperature > 90",
-                        BlinkWhenExpression="Temperature > 90"
-                    },
-                    new SchemeElement
-                    {
-                        Id=Guid.NewGuid(),
-                        X=520,Y=20,Width=80,Height=20,
-                        RotationExpression="Pressure*36"
-                    },
-                    new SchemeElement
-                    {
-                        Id=Guid.NewGuid(),
-                        X=20,Y=170,Width=100,Height=150,
-                        FillLevelExpression="Pressure / 10",
-                        ValueExpression="Pressure",
-                        WarnThreshold=6,
-                        CritThreshold=8.5
-                    },
-                    new SchemeElement
-                    {
-                        Id=Guid.NewGuid(),
-                        X=20,Y=20, Width=200, Height=120,
-                        ValueExpression="Temperature",
-                        WarnThreshold=60,
-                        CritThreshold=85,
-                        QualityTagName="Temperature",
-                        TextExpression="Temperature",
-                        TextFormat="F1",
-                        Units="°C"
-                    },
-                    new SchemeElement
-                    {
-                        Id=Guid.NewGuid(),
-                        X=20,Y=340,Width=20,Height=20,
-                        PositionXExpression="Pressure*20"
-                    },
-                    new SchemeElement
-                    {
-                        Id=Guid.NewGuid(),
-                        Kind=ShapeKind.Symbol,
-                        X=620,Y=170,Width=80,Height=80,
-                        SymbolPath=Path.Combine(AppContext.BaseDirectory,"Symbols","pump.svg"),
-                        RotationExpression="Pressure*36"
-                    },
-                    new SchemeElement
-                    {
-                        Id=Guid.NewGuid(),
-                        X=740,Y=170,Width=140,Height=60,
-                        ValueExpression="PumpCmd",
-                        WarnThreshold=0.5,
-                        TextExpression="PumpCmd",
-                        TextFormat="F0",
-                        OnClick=
+                        Id = Guid.NewGuid(),
+                        Kind = ElementKind.Rectangle,
+                        X = 20, Y = 20, Width = 200, Height = 120,
+                        Properties = [new ElementProperty(SchemeProperty.TextFormat, PropertyValue.FromString("F1")),
+                                      new ElementProperty(SchemeProperty.Units, PropertyValue.FromString("°C"))],
+                        Bindings =
                         [
-                            new ConfirmAction("Переключить насос?"),
-                            new ToggleTagAction("PumpCmd")
+                            new ElementBinding
+                            {
+                                PropertyId = SchemeProperty.FillColor,
+                                Expression = "Temperature",
+                                Mapping = StopMapping.Discrete,
+                                Stops =
+                                [
+                                    new Stop(0, PropertyValue.FromColor(0xFF33383D)),
+                                    new Stop(60, PropertyValue.FromColor(0xFFE8A33D)),
+                                    new Stop(85, PropertyValue.FromColor(0xFFE5484D)),
+                                ]
+                            },
+                            new ElementBinding { PropertyId = SchemeProperty.Text, Expression = "Temperature" },
+                        ]
+                    },
+                    new SchemeElement
+                    {
+                        Id = Guid.NewGuid(),
+                        Kind = ElementKind.Ellipse,
+                        X = 260, Y = 20, Width = 150, Height = 150,
+                        Bindings =
+                        [
+                            new ElementBinding
+                            {
+                                PropertyId = SchemeProperty.FillColor,
+                                Expression = "Pressure",
+                                Mapping = StopMapping.Discrete,
+                                Stops =
+                                [
+                                    new Stop(0, PropertyValue.FromColor(0xFF33383D)),
+                                    new Stop(6, PropertyValue.FromColor(0xFFE8A33D)),
+                                    new Stop(8.5, PropertyValue.FromColor(0xFFE5484D)),
+                                ]
+                            },
+                        ]
+                    },
+                    new SchemeElement
+                    {
+                        Id = Guid.NewGuid(),
+                        Kind = ElementKind.Ellipse,
+                        X = 440, Y = 70, Width = 30, Height = 30,
+                        Bindings =
+                        [
+                            new ElementBinding { PropertyId = SchemeProperty.Visible, Expression = "Temperature > 90" },
+                            new ElementBinding { PropertyId = SchemeProperty.Blink, Expression = "Temperature > 90" },
+                        ]
+                    },
+                    new SchemeElement
+                    {
+                        Id = Guid.NewGuid(),
+                        Kind = ElementKind.Rectangle,
+                        X = 520, Y = 20, Width = 80, Height = 20,
+                        Bindings = [new ElementBinding { PropertyId = SchemeProperty.Rotation, Expression = "Pressure*36" }],
+                        Events=
+                        [
+                            new SchemeEvent
+                            {
+                                Kind=SchemeEventKind.Click,
+                                Actions=[new ShowDialogAction("Клик по повернутому элементу!")]
+                            }
+                        ]
+                    },
+                    new SchemeElement
+                    {
+                        Id = Guid.NewGuid(),
+                        Kind = ElementKind.Rectangle,
+                        X = 20, Y = 170, Width = 100, Height = 150,
+                        Bindings =
+                        [
+                            new ElementBinding { PropertyId = SchemeProperty.FillLevel, Expression = "Pressure / 10" },
+                            new ElementBinding
+                            {
+                                PropertyId = SchemeProperty.FillColor,
+                                Expression = "Pressure",
+                                Mapping = StopMapping.Discrete,
+                                Stops =
+                                [
+                                    new Stop(0, PropertyValue.FromColor(0xFF33383D)),
+                                    new Stop(6, PropertyValue.FromColor(0xFFE8A33D)),
+                                    new Stop(8.5, PropertyValue.FromColor(0xFFE5484D)),
+                                ]
+                            },
+                        ]
+                    },
+                    new SchemeElement
+                    {
+                        Id = Guid.NewGuid(),
+                        Kind = ElementKind.Rectangle,
+                        X = 20, Y = 340, Width = 20, Height = 20,
+                        Bindings = [new ElementBinding { PropertyId = SchemeProperty.PositionOffsetX, Expression = "Pressure*20" }]
+                    },
+                    new SchemeElement
+                    {
+                        Id = Guid.NewGuid(),
+                        Kind = ElementKind.Symbol,
+                        X = 620, Y = 170, Width = 80, Height = 80,
+                        Properties = [new ElementProperty(SchemeProperty.SymbolName, PropertyValue.FromString("pump"))],
+                        Bindings = [new ElementBinding { PropertyId = SchemeProperty.Rotation, Expression = "Pressure*36" }]
+                    },
+                    new SchemeElement
+                    {
+                        Id = Guid.NewGuid(),
+                        Kind = ElementKind.Rectangle,
+                        X = 740, Y = 170, Width = 140, Height = 60,
+                        Properties = [new ElementProperty(SchemeProperty.TextFormat, PropertyValue.FromString("F0"))],
+                        Bindings =
+                        [
+                            new ElementBinding
+                            {
+                                PropertyId = SchemeProperty.FillColor,
+                                Expression = "PumpCmd",
+                                Mapping = StopMapping.Discrete,
+                                Stops =
+                                [
+                                    new Stop(0, PropertyValue.FromColor(0xFF33383D)),
+                                    new Stop(0.5, PropertyValue.FromColor(0xFFE8A33D)),
+                                ]
+                            },
+                            new ElementBinding { PropertyId = SchemeProperty.Text, Expression = "PumpCmd" },
+                        ],
+                        Events =
+                        [
+                            new SchemeEvent
+                            {
+                                Kind = SchemeEventKind.Click,
+                                Actions = [new ToggleTagAction(SchemeTagRef.Absolute("PumpCmd")) { Confirmation = "Переключить насос?" }]
+                            }
+                        ]
+                    },
+                    new SchemeElement
+                    {
+                        Id = Guid.NewGuid(),
+                        Kind = ElementKind.Rectangle,
+                        X = 900, Y = 20, Width = 30, Height = 250,
+                        Bindings =
+                        [
+                            new ElementBinding
+                            {
+                                PropertyId = SchemeProperty.FillColor,
+                                Expression = "Temperature",
+                                Mapping = StopMapping.Interpolated,
+                                Stops =
+                                [
+                                    new Stop(0, PropertyValue.FromColor(0xFF3D7FE8)),
+                                    new Stop(100, PropertyValue.FromColor(0xFFE5484D)),
+                                ]
+                            },
                         ]
                     }
                 ]

@@ -5,6 +5,8 @@ using Avalonia.Rendering.SceneGraph;
 using Avalonia.Skia;
 using SkiaSharp;
 using System.Diagnostics;
+using SCADA.Core.Schemes;
+using System.Collections.Concurrent;
 
 namespace SCADA.Graphics;
 
@@ -12,14 +14,14 @@ public readonly record struct SchemeElementVisual(
     Rect Bounds,
     SKColor Fill,
     bool QualityBad,
-    ShapeKind Kind,
+    ElementKind Kind,
     double RotationDegrees,
     bool HasFillLevel,
     double FillLevel,
     string Text,
     string? SymbolPath);
 
-internal sealed class SchemeDrawOperation(Rect bounds, IReadOnlyList<SchemeElementVisual> items, double panX, double panY, double zoom) : ICustomDrawOperation
+internal sealed class SchemeDrawOperation(Rect bounds, List<SchemeElementVisual> items, double panX, double panY, double zoom, ConcurrentStack<List<SchemeElementVisual>> pool) : ICustomDrawOperation
 
 {
     public Rect Bounds { get; } = bounds;
@@ -57,7 +59,7 @@ internal sealed class SchemeDrawOperation(Rect bounds, IReadOnlyList<SchemeEleme
                     using var fillPaint=new SKPaint{Color=item.Fill,IsAntialias=true};
                     canvas.DrawRect(fillRect,fillPaint);
                 }
-                else if(item.Kind==ShapeKind.Symbol && item.SymbolPath is {} path)
+                else if(item.Kind==ElementKind.Symbol && item.SymbolPath is {} path)
                 {
                     var picture=SymbolCache.Load(path);
                     var sourceRect=picture.CullRect;
@@ -74,7 +76,7 @@ internal sealed class SchemeDrawOperation(Rect bounds, IReadOnlyList<SchemeEleme
                 {
                     using var paint=new SKPaint{Color=item.Fill, IsAntialias=true};
 
-                    if(item.Kind==ShapeKind.Ellipse)
+                    if(item.Kind==ElementKind.Ellipse)
                         canvas.DrawOval(rect,paint);
                     else
                         canvas.DrawRect(rect,paint);
@@ -101,10 +103,11 @@ internal sealed class SchemeDrawOperation(Rect bounds, IReadOnlyList<SchemeEleme
                 canvas.Restore();
             }
             canvas.Restore();
+            Debug.WriteLine($"Draw: {sw.Elapsed.TotalMilliseconds:F2} мс, отрисовано {items.Count} элементов");
         }
     }
 
     public bool HitTest(Point p) => Bounds.Contains(p);
     public bool Equals(ICustomDrawOperation? other) => false;
-    public void Dispose() { }
+    public void Dispose()=>pool.Push(items);
 }

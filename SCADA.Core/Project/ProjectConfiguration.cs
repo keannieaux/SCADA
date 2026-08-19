@@ -1,6 +1,7 @@
 using SCADA.Core.Alarms;
 using SCADA.Core.Channels;
 using SCADA.Core.Devices;
+using SCADA.Core.Schemes;
 using SCADA.Core.Tags;
 
 public class ProjectConfiguration
@@ -14,4 +15,17 @@ public class ProjectConfiguration
 
     /// <summary>Правила сигнализации (M5). Пустая конфигурация = проект без аварий.</summary>
     public AlarmConfiguration Alarms { get; set; } = new();
+
+    /// <summary>Схемы (экраны) из schemes/*.scheme (концепт §3, §6).
+    /// Пустой список = проект без визуализации.</summary>
+    public List<Scheme> Schemes { get; set; } = [];
+
+    /// <summary>Шаблоны из templates/*.scheme — параметризованные фрагменты
+    /// схем (концепт §7).</summary>
+    public List<SchemeTemplate> Templates { get; set; } = [];
+
+    /// <summary>Стартовый экран — имя схемы из <see cref="Schemes"/>
+    /// (project.json → манифест пакета → SchemeInfo.IsStart). null — UI
+    /// открывает первый экран по алфавиту.</summary>
+    public string? StartScheme { get; set; }
 }

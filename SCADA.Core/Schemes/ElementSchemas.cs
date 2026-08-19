@@ -79,6 +79,22 @@ public static class ElementSchemas
         new(42, "CornerRadius", PropertyType.Number, PropertyValue.FromNumber(0), false, "Форма"),
     ];
 
+    // Свойства уровня схемы/шаблона (концепт §6): id 100+, те же правила
+    // стабильности, что у свойств элементов.
+    private static readonly PropertyDef[] SchemeProps =
+    [
+        new(100, "Background", PropertyType.Color, PropertyValue.FromColor(0xFF1B1D20), false, "Экран"),
+        new(101, "DesignWidth", PropertyType.Number, PropertyValue.FromNumber(1920), false, "Экран"),
+        new(102, "DesignHeight", PropertyType.Number, PropertyValue.FromNumber(1080), false, "Экран"),
+        new(103, "StartZoom", PropertyType.Number, PropertyValue.FromNumber(1.0), false, "Экран"),
+    ];
+
+    /// <summary>Схема свойств уровня схемы/шаблона (не элементов).</summary>
+    public static IReadOnlyList<PropertyDef> SchemeProperties => SchemeProps;
+
+    public static PropertyDef? FindSchemeProperty(int propertyId)
+        => SchemeProps.FirstOrDefault(d => d.Id == propertyId);
+
     private static readonly Dictionary<ElementKind, IReadOnlyList<PropertyDef>> _byKind = new()
     {
         [ElementKind.Rectangle] = [..Base, ..Shape, ..RectangleProps],
@@ -90,9 +106,14 @@ public static class ElementSchemas
         [ElementKind.Symbol] = [..Base, ..Shape, ..Symbol],
         [ElementKind.Image] = [..Base, ..Image],
 
-        // Конфигурация hosted-контролов — свойства под конкретный ControlType
-        // (перья тренда, фильтры журнала); вводятся вместе с контролами (B3).
-        [ElementKind.Control] = [],
+        // Конфигурация hosted-контрола: списочные конфиги (перья тренда,
+        // фильтры журнала) в скалярный PropertyValue не ложатся — поэтому
+        // JSON-документ, валидируемый контролом на своей стороне (§8).
+        [ElementKind.Control] =
+        [
+            new PropertyDef(50, "ConfigJson", PropertyType.String,
+                PropertyValue.FromString(""), false, "Контрол"),
+        ],
 
         // Параметры экземпляра — поля SchemeElement.TemplateName/Parameters.
         [ElementKind.Instance] = [],

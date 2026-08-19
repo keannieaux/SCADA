@@ -8,16 +8,16 @@ using SCADA.Package;
 using SCADA.Package.Sections;
 using SCADA.Runtime.Alarms;
 using SCADA.Runtime.Audit;
-using SCADA.Runtime.Configuration;
 using SCADA.Runtime.Historian;
 using SCADA.Runtime.Hosting;
 using SCADA.Runtime.Polling;
+using SCADA.Runtime.Schemes;
 using SCADA.Runtime.TagTable;
 
 namespace SCADA.Runtime.Runtime;
 
 /// <summary>
-/// Переиспользуемый composition root исполнения: пакет/проект → конфиг →
+/// Переиспользуемый composition root исполнения: пакет .scadapkg → конфиг →
 /// таблица тегов → движок опроса → сигнализация → архив → клиент.
 /// Внутри — собственный Generic Host; наружу только <see cref="Client"/>,
 /// состояние и жизненный цикл. Связывание повторяет логику, которая раньше
@@ -132,31 +132,28 @@ public sealed class RuntimeHost : IAsyncDisposable
     {
         var builder = Host.CreateApplicationBuilder();
 
-        string projectPath = options.ProjectPath;
+        // Рантайм работает только с собранным пакетом .scadapkg (ТЗ §14.2, A5.9):
+        // единственный путь загрузки — JSON-исходники читают редактор и сборщик,
+        // единственный мост «исходники → пакет» — ProjectBuildService.
+        string packagePath = options.ProjectPath;
+        if (Directory.Exists(packagePath))
+            throw new InvalidOperationException(
+                $"Рантайм исполняет только собранный пакет .scadapkg (A5.9), " +
+                $"получен каталог исходников: {packagePath}. " +
+                "Соберите проект через ProjectBuildService.");
         var owned = new List<IDisposable>();
 
-        ProjectConfiguration config;
-        CodePool? codePool = null;
-        bool devMode = Directory.Exists(projectPath);
-        if (devMode)
-        {
-            // dev-режим: исходный каталог проекта без сборки пакета.
-            // Боевая поставка работает только с .scadapkg (ТЗ §14.2)
-            config = ProjectLoader.Load(projectPath);
-            Console.WriteLine($"[dev] проект загружен из исходного каталога: {projectPath}");
-        }
-        else
-        {
-            using var packageReader = PackageReader.Open(projectPath);
-            config = PackageProjectLoader.Load(packageReader);
-            codePool = PackageProjectLoader.LoadCodePool(packageReader);
-        }
+        using var packageReader = PackageReader.Open(packagePath);
+        ProjectConfiguration config = PackageProjectLoader.Load(packageReader);
+        CodePool codePool = PackageProjectLoader.LoadCodePool(packageReader);
+        // имена секций нужны каталогу схем для списка ассетов — захватываем,
+        // пока читатель открыт (дальше ассеты читаются лениво по пути пакета)
+        var manifestEntryNames = packageReader.Manifest.Entries
+            .Select(e => e.Name).ToArray();
 
         // Изменяемое состояние живёт под папкой проекта (ТЗ §14.6). Для пакета
         // это каталог, в котором он лежит: сам .scadapkg неизменяем.
-        string projectDirectory = devMode
-            ? projectPath
-            : Path.GetDirectoryName(Path.GetFullPath(projectPath))!;
+        string projectDirectory = Path.GetDirectoryName(Path.GetFullPath(packagePath))!;
 
         var tagTable = new global::SCADA.Runtime.TagTable.TagTable(config.Tags.Count);
 
@@ -183,42 +180,49 @@ public sealed class RuntimeHost : IAsyncDisposable
         var journalOptions = options.Journal;
         var alarmOptions = options.Alarms;
 
-        // dev-режим: условия expression-правил компилируются на месте — фабрику
-        // даёт вызывающий, рантайм про компилятор не знает (§5.4). Боевая
-        // поставка получает скомпилированные правила из пакета (§6).
-        Func<AlarmRule, PreparedAlarmRule?>? expressionFactory = null;
-        if (devMode)
+        // Боевая поставка: правила уже скомпилированы в пул code.bin пакета (§6),
+        // компилятора в рантайме нет (§5.4).
+        PreparedAlarmRule? PrepareFromPool(AlarmRule rule)
         {
-            expressionFactory = options.ExpressionFactory;
-        }
-        else if (codePool is not null)
-        {
-            // боевая поставка: правила уже скомпилированы в пул code.bin пакета (§6)
-            expressionFactory = rule =>
+            if (rule.CompiledExpressionIndex is not int index)
             {
-                if (rule.CompiledExpressionIndex is not int index)
-                {
-                    Console.WriteLine(
-                        $"[сигнализация] правило '{rule.Name}': нет скомпилированного условия, правило пропущено");
-                    return null;
-                }
-                return new PreparedAlarmRule
-                {
-                    Rule = rule,
-                    Condition = codePool.ToExpression(index),
-                    TagIndices = codePool.Expressions[index].TagIndices
-                };
+                Console.WriteLine(
+                    $"[сигнализация] правило '{rule.Name}': нет скомпилированного условия, правило пропущено");
+                return null;
+            }
+            return new PreparedAlarmRule
+            {
+                Rule = rule,
+                Condition = codePool.ToExpression(index),
+                TagIndices = codePool.Expressions[index].TagIndices
             };
         }
 
         var preparedRules = AlarmRulePreparer.Prepare(
-            config.Alarms, config.Tags, expressionFactory,
+            config.Alarms, config.Tags, PrepareFromPool,
             warning => Console.WriteLine(warning));
 
-        var alarmEngine = new AlarmEngine(config.Alarms, preparedRules, tagTable, config.Tags);
+        // системные теги аварий (концепт §10): движок публикует состояние
+        // в TagTable на переходах — схемы вяжутся на них обычными привязками
+        var tagsByName = new Dictionary<string, TagId>(config.Tags.Count);
+        foreach (var tag in config.Tags)
+            tagsByName[tag.Name] = tag.Id;
 
+        // каталог статических данных проекта (M6): схемы, шаблоны, пул
+        // выражений, имена тегов, ассеты — неизменен в течение сессии
+        var schemeCatalog = new SchemeCatalog(
+            config, codePool, tagsByName, manifestEntryNames, packagePath);
+
+        var alarmTagPublisher = new AlarmTagPublisher(tagTable,
+            config.Alarms.Rules.Select(r => r.Name),
+            name => tagsByName.TryGetValue(name, out var id) ? id : (TagId?)null);
+
+        var alarmEngine = new AlarmEngine(config.Alarms, preparedRules, tagTable, config.Tags,
+            alarmTagPublisher);
+
+        var eventJournalPath = Path.Combine(projectDirectory, "events.db");
         var eventJournal = new SqliteEventJournal(
-            Path.Combine(projectDirectory, "events.db"),
+            eventJournalPath,
             warning => Console.WriteLine(warning));
         owned.Add(eventJournal);
 
@@ -239,7 +243,15 @@ public sealed class RuntimeHost : IAsyncDisposable
         builder.Services.AddSingleton(alarmBroadcaster);
         builder.Services.AddHostedService(_ => new AlarmPipeline(
             tagTable, alarmEngine, eventJournal, alarmBroadcaster,
-            alarmOptions, journalOptions, warning => Console.WriteLine(warning)));
+            alarmOptions, journalOptions, warning => Console.WriteLine(warning),
+            journalSizeMbTag: tagsByName.TryGetValue(
+                AlarmTags.SystemTag(AlarmTags.JournalSizeMbSuffix), out var sizeTag)
+                ? sizeTag : null,
+            journalSizeBytes: () =>
+            {
+                try { return new FileInfo(eventJournalPath).Length; }
+                catch (IOException) { return 0; }
+            }));
 
         // --- архив (ТЗ §8, docs/archive-format.md) ---
 
@@ -311,7 +323,7 @@ public sealed class RuntimeHost : IAsyncDisposable
 
             builder.Services.AddSingleton<IRuntimeClient>(sp =>
                 new LocalRuntimeClient(tagTable, sp.GetRequiredService<IHistorian>(), queryLimits,
-                    alarmEngine, eventJournal, alarmBroadcaster, engine));
+                    alarmEngine, eventJournal, alarmBroadcaster, engine, schemeCatalog));
 
             Console.WriteLine($"[архив] каталог: {archiveRoot}");
         }
@@ -320,7 +332,8 @@ public sealed class RuntimeHost : IAsyncDisposable
             // Без архива клиент отдаёт текущие значения и пустую историю: схемы и
             // диагностика работают, тренды показывают пустоту вместо падения.
             builder.Services.AddSingleton<IRuntimeClient>(new LocalRuntimeClient(
-                tagTable, null, queryLimits, alarmEngine, eventJournal, alarmBroadcaster, engine));
+                tagTable, null, queryLimits, alarmEngine, eventJournal, alarmBroadcaster,
+                engine, schemeCatalog));
             Console.WriteLine("[архив] выключен настройкой Runtime:Archive:Enabled");
         }
 

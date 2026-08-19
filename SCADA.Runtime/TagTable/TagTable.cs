@@ -43,6 +43,40 @@ public sealed class TagTable : ITagTable
         Interlocked.Increment(ref slot.Version);
     }
 
+    public void WriteString(TagId id, StringTagValue value)
+    {
+        ref TagSlot slot = ref _slots[id.Value];
+
+        // тот же протокол версий: текст и метка/качество меняются атомарно
+        // для читателя, эпоха общая с числовыми записями
+        Interlocked.Increment(ref slot.Version);
+        slot.Text = value.Text;
+        slot.Value = new TagValue(slot.Value.Value, value.TimeStampUtc, value.Quality);
+        slot.LastChangedEpoch = Interlocked.Increment(ref _epoch);
+        Interlocked.Increment(ref slot.Version);
+    }
+
+    public StringTagValue ReadString(TagId id)
+    {
+        ref TagSlot slot = ref _slots[id.Value];
+        while (true)
+        {
+            int before = Volatile.Read(ref slot.Version);
+            if ((before & 1) != 0)
+            {
+                continue;
+            }
+            string? text = slot.Text;
+            var value = text is null
+                ? StringTagValue.Empty // нетронутый слот: пусто и Uncertain, а не дефолтный Bad
+                : new StringTagValue(text, slot.Value.TimeStampUtc, slot.Value.Quality);
+
+            int after = Volatile.Read(ref slot.Version);
+            if (after == before)
+                return value;
+        }
+    }
+
     public int GetChangedSince(long epoch, Span<TagId> destination)
     {
         int count = 0;

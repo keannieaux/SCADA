@@ -25,6 +25,8 @@ public class AlarmEngineTests
         public void Write(TagId id, TagValue value) => _values[id.Value] = value;
         public long CurrentEpoch => 0;
         public int GetChangedSince(long epoch, Span<TagId> destination) => 0;
+        public void WriteString(TagId id, StringTagValue value) { }
+        public StringTagValue ReadString(TagId id) => StringTagValue.Empty;
     }
 
     private readonly StubTagTable _tags = new();

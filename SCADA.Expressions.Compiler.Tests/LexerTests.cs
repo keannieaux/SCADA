@@ -72,9 +72,9 @@ public class LexerTests
     [Fact]
     public void Tokenize_UnknownChar_ThrowsWithPosition()
     {
-        var ex = Assert.Throws<ExpressionCompileException>(() => Tokenize("a + @"));
+        var ex = Assert.Throws<ExpressionCompileException>(() => Tokenize("a + #"));
 
-        Assert.Contains("@", ex.Message);
+        Assert.Contains("#", ex.Message);
         Assert.Contains("4", ex.Message);
     }
 
@@ -104,5 +104,18 @@ public class LexerTests
 
         Assert.Single(tokens);
         Assert.Equal(TokenKind.EndOfInput, tokens[0].Kind);
+    }
+
+    [Fact]
+    public void Tokenize_SystemTagName_LeadingAt_ReadsAsOneIdentifier()
+    {
+        // системные теги (@Alarm.…/@AlarmGroup.…, концепт §10) — обычные
+        // идентификаторы с ведущим '@'
+        var tokens = Tokenize("@AlarmGroup.Цех2.Секция5.AnyUnacked > 0");
+
+        Assert.Equal(
+            [TokenKind.Identifier, TokenKind.Greater, TokenKind.Number, TokenKind.EndOfInput],
+            Kinds(tokens));
+        Assert.Equal("@AlarmGroup.Цех2.Секция5.AnyUnacked", tokens[0].Text);
     }
 }

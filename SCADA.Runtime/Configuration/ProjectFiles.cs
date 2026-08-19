@@ -5,12 +5,17 @@ using SCADA.Core.Tags;
 
 namespace SCADA.Runtime.Configuration;
 
-// project.json: {"formatVersion": 1, "name": "MyProject", "version": "1.0"}
+// project.json: {"formatVersion": 1, "name": "MyProject", "version": "1.0",
+//                "startScheme": "main"}
 public class ProjectFile
 {
     public int FormatVersion { get; set; }
     public required string Name { get; set; }
     public string Version { get; set; } = "1.0";
+
+    /// <summary>Стартовый экран (имя схемы из schemes/). Не задан —
+    /// UI открывает первый по алфавиту.</summary>
+    public string? StartScheme { get; set; }
 }
 
 // devices.json: {"formatVersion": 1, "channels": [...], "devices": [...]}

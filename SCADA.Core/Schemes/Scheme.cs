@@ -8,6 +8,15 @@ public sealed class Scheme
 {
     public required Guid Id { get; init; }
     public required string Name { get; init; }
+
+    /// <summary>Свойства уровня схемы (фон, размер, стартовый зум) —
+    /// разреженные, схема дескрипторов ElementSchemas.SchemeProperties.</summary>
+    public IReadOnlyList<ElementProperty> Properties { get; init; } = [];
+
+    /// <summary>События уровня экрана (Opened/Closed, §5.1) — тот же формат
+    /// цепочек действий, что у элементов.</summary>
+    public IReadOnlyList<SchemeEvent> Events { get; init; } = [];
+
     public required IReadOnlyList<SchemeElement> Elements { get; init; }
 }
 
@@ -34,5 +43,12 @@ public sealed class SchemeTemplate
     public required Guid Id { get; init; }
     public required string Name { get; init; }
     public IReadOnlyList<TemplateParameter> Parameters { get; init; } = [];
+
+    /// <summary>Свойства уровня шаблона — та же схема, что у Scheme.</summary>
+    public IReadOnlyList<ElementProperty> Properties { get; init; } = [];
+
+    /// <summary>События уровня шаблона (актуально для попапов, §5.1).</summary>
+    public IReadOnlyList<SchemeEvent> Events { get; init; } = [];
+
     public required IReadOnlyList<SchemeElement> Elements { get; init; }
 }

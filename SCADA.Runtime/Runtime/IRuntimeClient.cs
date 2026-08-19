@@ -1,5 +1,8 @@
 using SCADA.Alarms;
+using SCADA.Core.Schemes;
 using SCADA.Core.Tags;
+using SCADA.Package.Sections;
+using SCADA.Runtime.Schemes;
 
 namespace SCADA.Runtime.Runtime;
 
@@ -17,6 +20,20 @@ public interface IRuntimeClient : ITagValueReader
     // По одному вызову на тег в remote-варианте это были бы сотни сетевых запросов —
     // поэтому пакетный метод в контракте с самого начала.
     void Read(ReadOnlySpan<TagId> ids, Span<TagValue> results);
+
+    // --- строковые теги (концепт §4.6, A7) ---
+    //
+    // Строки живут параллельно числам в тех же слотах и эпохах: грязный
+    // пересчёт по GetChangedSince покрывает их без отдельного канала.
+    // Источники строк в v1 — внутренние записи (WriteLocalString); строки из
+    // устройств (OPC UA ноды, ASCII из регистров Modbus/FINS) появятся с
+    // первым строковым драйвером — контракт под это уже готов.
+
+    /// <summary>Чтение строкового тега. Нетронутый тег — StringTagValue.Empty.</summary>
+    StringTagValue ReadString(TagId id);
+
+    /// <summary>Пакетное чтение строк — та же причина, что у числового Read.</summary>
+    void ReadStrings(ReadOnlySpan<TagId> ids, Span<StringTagValue> results);
 
     // --- отслеживание изменений (модель эпох, ТЗ §9.2, §11.7) ---
 
@@ -77,6 +94,11 @@ public interface IRuntimeClient : ITagValueReader
     // без аудита — системное использование. Операторская запись — WriteTagsAsync.
     void WriteLocal(TagId id, double value);
 
+    /// <summary>Системная запись строкового тега (текстовые статусы, сообщения
+    /// от подсистем). Операторская запись строк появится вместе со строковым
+    /// вариантом TagWriteItem — отдельная задача (поля ввода).</summary>
+    void WriteLocalString(TagId id, string text);
+
     // --- запись в устройства (M7) ---
     //
     // Контракт batch-native: кнопка — пакет из одного элемента, рецепт — из
@@ -117,4 +139,37 @@ public interface IRuntimeClient : ITagValueReader
 
     /// <summary>Подписка на изменения аварий (баннер, звук).</summary>
     IAsyncEnumerable<AlarmChange> SubscribeAlarmsAsync(CancellationToken ct = default);
+
+    // --- схемы (M6, docs/visualization-concept.md §11) ---
+    //
+    // Статические данные проекта: неизменны в течение сессии, клиент обязан
+    // кэшировать (схему берут один раз при навигации, не на каждый кадр).
+    // Remote-реализация вольна передавать сырые байты секций и парсить их
+    // SchemeSectionReader на своей стороне — формы контракта это допускают.
+
+    /// <summary>Список схем проекта (Id + имя) для меню и навигации.</summary>
+    IReadOnlyList<SchemeInfo> GetSchemes();
+
+    /// <summary>Скомпилированная схема по имени: привязки ссылаются на
+    /// <see cref="GetCodePool"/> через CompiledExpressionIndex, пересчёт —
+    /// по эпохам через CompiledTagIndices. KeyNotFoundException, если нет.</summary>
+    Scheme GetScheme(string name);
+
+    /// <summary>Шаблоны для инстанцирования (параметризованные окна, faceplate).</summary>
+    IReadOnlyList<SchemeTemplate> GetTemplates();
+
+    /// <summary>Пул байткода проекта, один на все схемы и правила аварий.</summary>
+    CodePool GetCodePool();
+
+    /// <summary>Разрешение имени тега в TagId: действия схем (WriteTag и т.п.)
+    /// и параметрические ссылки хранят имена, а не Id. Включая системные
+    /// теги (@Alarm.*, диагностику).</summary>
+    bool TryGetTagId(string name, out TagId id);
+
+    /// <summary>Имена ассетов пакета ("symbols/valve.svg", "images/...", "fonts/...").</summary>
+    IReadOnlyList<string> GetAssets();
+
+    /// <summary>Байты ассета. Вызовы редкие, размер может быть большим —
+    /// клиент кэширует (один символ используется многими элементами).</summary>
+    byte[] GetAsset(string path);
 }

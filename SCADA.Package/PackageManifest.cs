@@ -10,6 +10,10 @@ public sealed class PackageManifest
     public required string ProjectVersion{get; init;}
     public DateTimeOffset CreatedUtc{get; init;}
 
+    /// <summary>Стартовый экран (project.json → пакет → SchemeInfo.IsStart).
+    /// Опционально: старые пакеты читаются с null.</summary>
+    public string? StartScheme { get; init; }
+
     public IReadOnlyList<PackageEntryInfo> Entries {get; init;} = [];
 }
 

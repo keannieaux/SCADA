@@ -1,8 +1,11 @@
 using SCADA.Alarms;
+using SCADA.Core.Schemes;
 using SCADA.Core.Tags;
+using SCADA.Package.Sections;
 using SCADA.Runtime.Alarms;
 using SCADA.Runtime.Historian;
 using SCADA.Runtime.Polling;
+using SCADA.Runtime.Schemes;
 using SCADA.Runtime.TagTable;
 
 namespace SCADA.Runtime.Runtime;
@@ -21,6 +24,7 @@ public sealed class LocalRuntimeClient : IRuntimeClient
     private readonly IEventJournal? _eventJournal;
     private readonly AlarmChangeBroadcaster? _alarmBroadcaster;
     private readonly PollingEngine? _pollingEngine;
+    private readonly SchemeCatalog? _schemeCatalog;
 
     /// <param name="historian">
     /// null, если архив выключен: тогда запросы истории отдают пустые ряды,
@@ -34,6 +38,10 @@ public sealed class LocalRuntimeClient : IRuntimeClient
     /// null, если записи в устройства нет (чтение-only сценарии): WriteTagsAsync
     /// отдаёт отказ, а не падает.
     /// </param>
+    /// <param name="schemeCatalog">
+    /// null только в unit-тестах клиента: методы схем отдают пустые результаты,
+    /// GetScheme/GetAsset — KeyNotFoundException.
+    /// </param>
     public LocalRuntimeClient(
         ITagTable tagTable,
         IHistorian? historian = null,
@@ -41,7 +49,8 @@ public sealed class LocalRuntimeClient : IRuntimeClient
         IAlarmEngine? alarmEngine = null,
         IEventJournal? eventJournal = null,
         AlarmChangeBroadcaster? alarmBroadcaster = null,
-        PollingEngine? pollingEngine = null)
+        PollingEngine? pollingEngine = null,
+        SchemeCatalog? schemeCatalog = null)
     {
         _tagTable = tagTable;
         _historian = historian;
@@ -50,6 +59,7 @@ public sealed class LocalRuntimeClient : IRuntimeClient
         _eventJournal = eventJournal;
         _alarmBroadcaster = alarmBroadcaster;
         _pollingEngine = pollingEngine;
+        _schemeCatalog = schemeCatalog;
     }
 
     public TagValue Read(TagId id) => _tagTable.Read(id);
@@ -60,6 +70,14 @@ public sealed class LocalRuntimeClient : IRuntimeClient
             results[i] = _tagTable.Read(ids[i]);
     }
 
+    public StringTagValue ReadString(TagId id) => _tagTable.ReadString(id);
+
+    public void ReadStrings(ReadOnlySpan<TagId> ids, Span<StringTagValue> results)
+    {
+        for (int i = 0; i < ids.Length; i++)
+            results[i] = _tagTable.ReadString(ids[i]);
+    }
+
     public long CurrentEpoch => _tagTable.CurrentEpoch;
 
     public int GetChangedSince(long epoch, Span<TagId> destination)
@@ -67,6 +85,10 @@ public sealed class LocalRuntimeClient : IRuntimeClient
 
     public void WriteLocal(TagId id, double value)
         => _tagTable.Write(id, new TagValue(value, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), Quality.Good));
+
+    public void WriteLocalString(TagId id, string text)
+        => _tagTable.WriteString(id, new StringTagValue(text,
+            DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), Quality.Good));
 
     public async ValueTask<IReadOnlyList<TagWriteResult>> WriteTagsAsync(
         IReadOnlyList<TagWriteItem> items, string requestedBy, CancellationToken ct = default)
@@ -198,6 +220,36 @@ public sealed class LocalRuntimeClient : IRuntimeClient
 
     public IAsyncEnumerable<AlarmChange> SubscribeAlarmsAsync(CancellationToken ct = default)
         => _alarmBroadcaster?.Subscribe(ct) ?? EmptyAlarmChanges(ct);
+
+    // --- схемы (M6) ---
+
+    public IReadOnlyList<SchemeInfo> GetSchemes()
+        => _schemeCatalog?.Schemes ?? [];
+
+    public Scheme GetScheme(string name)
+        => _schemeCatalog?.GetScheme(name)
+            ?? throw new KeyNotFoundException($"Схема '{name}' не найдена");
+
+    public IReadOnlyList<SchemeTemplate> GetTemplates()
+        => _schemeCatalog?.Templates ?? [];
+
+    public CodePool GetCodePool()
+        => _schemeCatalog?.CodePool ?? new CodePool([], []);
+
+    public bool TryGetTagId(string name, out TagId id)
+    {
+        if (_schemeCatalog is not null && _schemeCatalog.TagsByName.TryGetValue(name, out id))
+            return true;
+        id = default;
+        return false;
+    }
+
+    public IReadOnlyList<string> GetAssets()
+        => _schemeCatalog?.Assets ?? [];
+
+    public byte[] GetAsset(string path)
+        => _schemeCatalog?.GetAsset(path)
+            ?? throw new KeyNotFoundException($"Ассет '{path}' не найден");
 
     private static async IAsyncEnumerable<AlarmChange> EmptyAlarmChanges(
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)

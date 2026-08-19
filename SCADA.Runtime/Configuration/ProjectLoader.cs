@@ -31,10 +31,15 @@ public static class ProjectLoader
         if (alarmsFile is not null)
             CheckFormatVersion(alarmsFile.FormatVersion, "alarms.json", errors);
 
+        // схемы и шаблоны из schemes/ templates/ (концепт §3, §7) —
+        // каталоги опциональны; ошибки исходников — в общий список
+        var (schemes, templates) = SchemeFileLoader.Load(projectDirectory, errors);
+
         var config = new ProjectConfiguration
         {
             Name = projectFile.Name,
             Version = projectFile.Version,
+            StartScheme = projectFile.StartScheme,
             Tags = tagsFile.Tags,
             Devices = devicesFile.Devices,
             Channels = devicesFile.Channels,
@@ -46,7 +51,9 @@ public static class ProjectLoader
                     Templates = alarmsFile.Templates,
                     Sound = alarmsFile.Sound,
                     Defaults = alarmsFile.Defaults
-                }
+                },
+            Schemes = schemes,
+            Templates = templates
         };
 
         // правила целостности живут в ProjectValidator — те же, что использует редактор
@@ -59,6 +66,11 @@ public static class ProjectLoader
         // исходной формы; PackageBuilder идёт через этот же Load, поэтому
         // Id диагностики совпадают между пакетом и рантаймом
         DiagnosticsGenerator.AppendDiagnostics(config);
+
+        // системные теги аварий (концепт §10) — строго после диагностики
+        // (порядок определяет TagId); схемы компилируются против каталога,
+        // уже содержащего @Alarm.*/@AlarmGroup.*/@AlarmSystem.*
+        AlarmTagGenerator.AppendAlarmTags(config);
 
         return config;
     }

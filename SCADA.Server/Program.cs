@@ -1,16 +1,13 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using SCADA.Alarms;
-using SCADA.Core.Alarms;
 using SCADA.Drivers.Modbus;
 using SCADA.Drivers.Simulator;
-using SCADA.Expressions.Compiler;
+using SCADA.Package.Builder;
 using SCADA.Runtime.Alarms;
-using SCADA.Runtime.Configuration;
 using SCADA.Runtime.Historian;
 using SCADA.Runtime.Polling;
 using SCADA.Runtime.Runtime;
-using SCADA.Server;
 
 // Composition root сервера сбора данных: регистрация драйверов (ТЗ §7.2),
 // чтение конфигурации процесса и запуск RuntimeHost. Само связывание ядра
@@ -19,13 +16,27 @@ using SCADA.Server;
 var builder = Host.CreateApplicationBuilder(args);
 
 // Внешние драйверы регистрируются здесь — Runtime о них не знает (ТЗ §7.2).
-// Симулятор тоже подключается в composition root: он нужен не только в dev,
-// но и для проверки мнемосхем без реального ПЛК (режим исполнения в редакторе).
+// Симулятор тоже подключается в composition root: он нужен для проверки
+// мнемосхем без реального ПЛК (режим исполнения/симуляции в редакторе).
 DriverFactory.Register("simulator", () => new SimulatorDriver());
 DriverFactory.Register("modbus-tcp", () => new ModbusTcpDriver());
 
 string projectPath = builder.Configuration["Runtime:Project"]
     ?? throw new InvalidOperationException("Не задан путь к проекту (Runtime:Project)");
+
+// Рантайм работает только с собранным пакетом (A5.9). Для удобства демо:
+// если указан каталог исходников, собираем пакет на месте и запускаем его.
+if (Directory.Exists(projectPath))
+{
+    string packagePath = Path.Combine(projectPath, "output", "DemoProject.scadapkg");
+    Console.WriteLine($"[демо] сборка пакета из исходников: {projectPath} → {packagePath}");
+    var build = ProjectBuildService.Build(projectPath, packagePath);
+    foreach (var diagnostic in build.Diagnostics)
+        Console.WriteLine($"[сборка] {diagnostic}");
+    if (!build.Success)
+        throw new InvalidOperationException("Сборка демо-проекта не удалась");
+    projectPath = packagePath;
+}
 
 var journal = new JournalOptions();
 builder.Configuration.GetSection("Runtime:Journal").Bind(journal);
@@ -44,37 +55,7 @@ var options = new RuntimeHostOptions
     Journal = journal,
     Alarms = alarms,
     Archive = archive,
-    HistoryLimits = historyLimits,
-    ExpressionFactory = CreateDevExpressionFactory(projectPath)
+    HistoryLimits = historyLimits
 };
 
 await RuntimeHost.RunAsync(options);
-
-// dev-режим: условия expression-правил компилируются на месте. Боевая
-// поставка получает скомпилированные правила из пакета (§6) и компилятор
-// не использует (§5.4) — поэтому фабрика строится только для каталога проекта.
-static Func<AlarmRule, PreparedAlarmRule?>? CreateDevExpressionFactory(string projectPath)
-{
-    if (!Directory.Exists(projectPath))
-        return null;
-
-    var catalog = new ProjectTagCatalog(ProjectLoader.Load(projectPath));
-    return rule =>
-    {
-        try
-        {
-            var compiled = ExpressionCompiler.Compile(rule.Condition!, catalog);
-            return new PreparedAlarmRule
-            {
-                Rule = rule,
-                Condition = compiled.ToExpression(),
-                TagIndices = compiled.TagIndices
-            };
-        }
-        catch (ExpressionCompileException ex)
-        {
-            Console.WriteLine($"[сигнализация] правило '{rule.Name}': {ex.Message}");
-            return null;
-        }
-    };
-}

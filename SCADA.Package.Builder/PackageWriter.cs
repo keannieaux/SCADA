@@ -23,13 +23,15 @@ public sealed class PackageWriter
             throw new ArgumentException($"Секция '{name}' уже добавлена");
     }
 
-    public void Save(string path, string projectName, string projectVersion)
+    public void Save(string path, string projectName, string projectVersion,
+        string? startScheme = null)
     {
         var manifest = new PackageManifest
         {
             FormatVersion = PackageManifest.CurrentFormatVersion,
             ProjectName = projectName,
             ProjectVersion = projectVersion,
+            StartScheme = startScheme,
             CreatedUtc = DateTimeOffset.UtcNow,
             Entries = _entries
                 .Select(e => new PackageEntryInfo(e.Key, Convert.ToHexString(SHA256.HashData(e.Value))))

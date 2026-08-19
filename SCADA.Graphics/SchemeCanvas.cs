@@ -161,7 +161,7 @@ public sealed class SchemeCanvas : Control
             if (HitTestShape(source.Kind, bounds, rotation, point))
             {
 
-                var context=new EvaluationContext{Tags=_runtimeClient};
+                var context=new EvaluationContext{Tags=_runtimeClient,NowUnixMs=DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()};
                 await ExecuteActions(actions, context);
                 return;
             }
@@ -255,7 +255,7 @@ public sealed class SchemeCanvas : Control
         for(int i=0;i<effectiveCount;i++)
             _changedSet[_changedBuffer[i].Value]=true;
 
-        var evalContext=new EvaluationContext{Tags=_runtimeClient};
+        var evalContext=new EvaluationContext{Tags=_runtimeClient, NowUnixMs=DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()};
         int dirtyCount=0;
 
         var sw=Stopwatch.StartNew();
@@ -279,7 +279,7 @@ public sealed class SchemeCanvas : Control
 
     private void RecomputeAll()
     {
-        var evalContext=new EvaluationContext{Tags=_runtimeClient};
+        var evalContext=new EvaluationContext{Tags=_runtimeClient, NowUnixMs=DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()};
         foreach(var element in _runtime)
             Recompute(element,evalContext);
     }

@@ -81,7 +81,7 @@ public sealed class SchemesViewModel : ViewModelBase
                         Id = Guid.NewGuid(),
                         Kind = ElementKind.Rectangle,
                         X = 520, Y = 20, Width = 80, Height = 20,
-                        Bindings = [new ElementBinding { PropertyId = SchemeProperty.Rotation, Expression = "Pressure*36" }],
+                        Bindings = [new ElementBinding { PropertyId = SchemeProperty.Rotation, Expression = "now() * 90 % 360", Volatile = true }],
                         Events=
                         [
                             new SchemeEvent

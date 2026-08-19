@@ -6,6 +6,7 @@ using Avalonia.Skia;
 using SkiaSharp;
 using System.Diagnostics;
 using SCADA.Core.Schemes;
+using System.Collections.Concurrent;
 
 namespace SCADA.Graphics;
 
@@ -20,7 +21,7 @@ public readonly record struct SchemeElementVisual(
     string Text,
     string? SymbolPath);
 
-internal sealed class SchemeDrawOperation(Rect bounds, IReadOnlyList<SchemeElementVisual> items, double panX, double panY, double zoom) : ICustomDrawOperation
+internal sealed class SchemeDrawOperation(Rect bounds, List<SchemeElementVisual> items, double panX, double panY, double zoom, ConcurrentStack<List<SchemeElementVisual>> pool) : ICustomDrawOperation
 
 {
     public Rect Bounds { get; } = bounds;
@@ -102,10 +103,11 @@ internal sealed class SchemeDrawOperation(Rect bounds, IReadOnlyList<SchemeEleme
                 canvas.Restore();
             }
             canvas.Restore();
+            Debug.WriteLine($"Draw: {sw.Elapsed.TotalMilliseconds:F2} мс, отрисовано {items.Count} элементов");
         }
     }
 
     public bool HitTest(Point p) => Bounds.Contains(p);
     public bool Equals(ICustomDrawOperation? other) => false;
-    public void Dispose() { }
+    public void Dispose()=>pool.Push(items);
 }

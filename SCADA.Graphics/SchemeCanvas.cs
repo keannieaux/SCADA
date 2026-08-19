@@ -9,6 +9,7 @@ using SCADA.Runtime.Runtime;
 using SkiaSharp;
 using System.Diagnostics;
 using Avalonia.Input;
+using System.Collections.Concurrent;
 
 namespace SCADA.Graphics;
 
@@ -32,6 +33,7 @@ public sealed class SchemeCanvas : Control
     private bool _pointerMoved;
 
     private long _lastEpoch=-1;
+    private readonly ConcurrentStack<List<SchemeElementVisual>> _visualsPool=new();
 
     public SchemeCanvas(IReadOnlyList<CompiledSchemeElement> elements, IRuntimeClient runtimeClient, int tagCount)
     {
@@ -152,15 +154,37 @@ public sealed class SchemeCanvas : Control
             double offsetX=runtime.Get(SchemeProperty.PositionOffsetX).Number;
             double offsetY=runtime.Get(SchemeProperty.PositionOffsetY).Number;
             var bounds=new Rect(source.X+offsetX, source.Y+offsetY, source.Width, source.Height);
+            double rotation=runtime.Get(SchemeProperty.Rotation).Number;
 
-            if (bounds.Contains(point))
+            if (HitTestShape(source.Kind, bounds, rotation, point))
             {
+
                 var context=new EvaluationContext{Tags=_runtimeClient};
                 await ExecuteActions(actions, context);
                 return;
             }
         }
     }
+
+    private static bool HitTestShape(ElementKind kind, Rect bounds, double rotationDegrees, Point point)
+    {
+        var rect=new SKRect((float)bounds.X, (float)bounds.Y, (float)(bounds.X+bounds.Width), (float)(bounds.Y+bounds.Height));
+
+        using var builder=new SKPathBuilder();
+        if (kind==ElementKind.Ellipse)
+            builder.AddOval(rect);
+        else
+            builder.AddRect(rect);
+        using var path=builder.Detach();
+
+        if (rotationDegrees!=0)
+            path.Transform(SKMatrix.CreateRotationDegrees((float)rotationDegrees, rect.MidX, rect.MidY));
+
+        return path.Contains((float)point.X, (float)point.Y);
+    }
+
+
+
 
     private async Task ExecuteActions(IReadOnlyList<CompiledSchemeAction> actions, EvaluationContext context)
     {
@@ -175,7 +199,7 @@ public sealed class SchemeCanvas : Control
             {
                 bool confirmed=await SchemeDialogs.ShowConfirm(owner, message);
                 if (!confirmed)
-                    continue;
+                    return;
             }
 
             switch (action)
@@ -352,7 +376,10 @@ public sealed class SchemeCanvas : Control
 
     public override void Render(DrawingContext context)
     {
-        var visuals=new List<SchemeElementVisual>(_runtime.Length);
+        if(!_visualsPool.TryPop(out var visuals))
+            visuals=new List<SchemeElementVisual>(_runtime.Length);
+        visuals.Clear();
+        var visibleRect=new Rect(-_panX/_zoom, -_panY/_zoom, Bounds.Width/_zoom, Bounds.Height/_zoom);
 
         foreach (var runtime in _runtime)
         {
@@ -364,7 +391,19 @@ public sealed class SchemeCanvas : Control
             var source=runtime.Compiled.Source;
             double offsetX=runtime.Get(SchemeProperty.PositionOffsetX).Number;
             double offsetY=runtime.Get(SchemeProperty.PositionOffsetY).Number;
+            double rotation=runtime.Get(SchemeProperty.Rotation).Number;
             var bounds=new Rect(source.X+offsetX,source.Y+offsetY,source.Width,source.Height);
+            if (rotation != 0)
+            {
+                double rad=rotation*Math.PI/180;
+                double cos=Math.Abs(Math.Cos(rad)), sin=Math.Abs(Math.Sin(rad));
+                double rw=bounds.Width*cos+bounds.Height*sin;
+                double rh=bounds.Width*sin+bounds.Height*cos;
+                bounds=new Rect(bounds.Center.X-rw/2, bounds.Center.Y-rh/2,rw,rh);
+            }
+
+            if(!bounds.Intersects(visibleRect))
+                continue;
 
             string? symbolPath=source.Kind==ElementKind.Symbol
                 ? ResolveSymbolPath(runtime.Get(SchemeProperty.SymbolName).Text)
@@ -375,14 +414,14 @@ public sealed class SchemeCanvas : Control
                 Fill: ToSkColor(runtime.Get(SchemeProperty.FillColor)),
                 QualityBad: runtime.QualityBad,
                 Kind: source.Kind,
-                RotationDegrees: runtime.Get(SchemeProperty.Rotation).Number,
+                RotationDegrees: rotation,
                 HasFillLevel: runtime.Compiled.HasFillBinding,
                 FillLevel: runtime.Get(SchemeProperty.FillLevel).Number,
                 Text: runtime.Get(SchemeProperty.Text).Text ?? "",
                 SymbolPath: symbolPath));
         }
 
-        context.Custom(new SchemeDrawOperation(Bounds,visuals,_panX,_panY,_zoom));
+        context.Custom(new SchemeDrawOperation(Bounds,visuals,_panX,_panY,_zoom,_visualsPool));
     }
 
     private static string? ResolveSymbolPath(string? symbolName)

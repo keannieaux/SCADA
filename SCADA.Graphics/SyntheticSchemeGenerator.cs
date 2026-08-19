@@ -40,6 +40,7 @@ public static class SyntheticSchemeGenerator
                             new Stop(85, PropertyValue.FromColor(0xFFE5484D)),
                         ]
                     },
+                    new ElementBinding{PropertyId=SchemeProperty.Text, Expression=tagName},
                 ]
             });
         }

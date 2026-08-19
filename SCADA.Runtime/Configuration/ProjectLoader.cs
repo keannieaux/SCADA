@@ -39,6 +39,7 @@ public static class ProjectLoader
         {
             Name = projectFile.Name,
             Version = projectFile.Version,
+            StartScheme = projectFile.StartScheme,
             Tags = tagsFile.Tags,
             Devices = devicesFile.Devices,
             Channels = devicesFile.Channels,

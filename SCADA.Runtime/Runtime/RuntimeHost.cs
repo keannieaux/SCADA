@@ -11,6 +11,7 @@ using SCADA.Runtime.Audit;
 using SCADA.Runtime.Historian;
 using SCADA.Runtime.Hosting;
 using SCADA.Runtime.Polling;
+using SCADA.Runtime.Schemes;
 using SCADA.Runtime.TagTable;
 
 namespace SCADA.Runtime.Runtime;
@@ -145,6 +146,10 @@ public sealed class RuntimeHost : IAsyncDisposable
         using var packageReader = PackageReader.Open(packagePath);
         ProjectConfiguration config = PackageProjectLoader.Load(packageReader);
         CodePool codePool = PackageProjectLoader.LoadCodePool(packageReader);
+        // имена секций нужны каталогу схем для списка ассетов — захватываем,
+        // пока читатель открыт (дальше ассеты читаются лениво по пути пакета)
+        var manifestEntryNames = packageReader.Manifest.Entries
+            .Select(e => e.Name).ToArray();
 
         // Изменяемое состояние живёт под папкой проекта (ТЗ §14.6). Для пакета
         // это каталог, в котором он лежит: сам .scadapkg неизменяем.
@@ -202,6 +207,11 @@ public sealed class RuntimeHost : IAsyncDisposable
         var tagsByName = new Dictionary<string, TagId>(config.Tags.Count);
         foreach (var tag in config.Tags)
             tagsByName[tag.Name] = tag.Id;
+
+        // каталог статических данных проекта (M6): схемы, шаблоны, пул
+        // выражений, имена тегов, ассеты — неизменен в течение сессии
+        var schemeCatalog = new SchemeCatalog(
+            config, codePool, tagsByName, manifestEntryNames, packagePath);
 
         var alarmTagPublisher = new AlarmTagPublisher(tagTable,
             config.Alarms.Rules.Select(r => r.Name),
@@ -313,7 +323,7 @@ public sealed class RuntimeHost : IAsyncDisposable
 
             builder.Services.AddSingleton<IRuntimeClient>(sp =>
                 new LocalRuntimeClient(tagTable, sp.GetRequiredService<IHistorian>(), queryLimits,
-                    alarmEngine, eventJournal, alarmBroadcaster, engine));
+                    alarmEngine, eventJournal, alarmBroadcaster, engine, schemeCatalog));
 
             Console.WriteLine($"[архив] каталог: {archiveRoot}");
         }
@@ -322,7 +332,8 @@ public sealed class RuntimeHost : IAsyncDisposable
             // Без архива клиент отдаёт текущие значения и пустую историю: схемы и
             // диагностика работают, тренды показывают пустоту вместо падения.
             builder.Services.AddSingleton<IRuntimeClient>(new LocalRuntimeClient(
-                tagTable, null, queryLimits, alarmEngine, eventJournal, alarmBroadcaster, engine));
+                tagTable, null, queryLimits, alarmEngine, eventJournal, alarmBroadcaster,
+                engine, schemeCatalog));
             Console.WriteLine("[архив] выключен настройкой Runtime:Archive:Enabled");
         }
 

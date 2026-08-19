@@ -92,7 +92,7 @@ public static class ProjectBuildService
                 foreach (var (entry, bytes) in schemeAssetEntries)
                     writer.AddEntry(entry, bytes);
 
-                writer.Save(outputPath, config.Name, config.Version);
+                writer.Save(outputPath, config.Name, config.Version, config.StartScheme);
             }
 
             ReportArchiveVolume(config, diagnostics);

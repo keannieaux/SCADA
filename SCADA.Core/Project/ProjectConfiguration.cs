@@ -23,4 +23,9 @@ public class ProjectConfiguration
     /// <summary>Шаблоны из templates/*.scheme — параметризованные фрагменты
     /// схем (концепт §7).</summary>
     public List<SchemeTemplate> Templates { get; set; } = [];
+
+    /// <summary>Стартовый экран — имя схемы из <see cref="Schemes"/>
+    /// (project.json → манифест пакета → SchemeInfo.IsStart). null — UI
+    /// открывает первый экран по алфавиту.</summary>
+    public string? StartScheme { get; set; }
 }

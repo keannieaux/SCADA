@@ -23,6 +23,7 @@ public static class PackageProjectLoader
         {
             Name = reader.Manifest.ProjectName,
             Version = reader.Manifest.ProjectVersion,
+            StartScheme = reader.Manifest.StartScheme,
             Tags = tags,
             Devices = devices,
             Channels = channels,

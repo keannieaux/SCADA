@@ -1,5 +1,8 @@
 using SCADA.Alarms;
+using SCADA.Core.Schemes;
 using SCADA.Core.Tags;
+using SCADA.Package.Sections;
+using SCADA.Runtime.Schemes;
 
 namespace SCADA.Runtime.Runtime;
 
@@ -117,4 +120,37 @@ public interface IRuntimeClient : ITagValueReader
 
     /// <summary>Подписка на изменения аварий (баннер, звук).</summary>
     IAsyncEnumerable<AlarmChange> SubscribeAlarmsAsync(CancellationToken ct = default);
+
+    // --- схемы (M6, docs/visualization-concept.md §11) ---
+    //
+    // Статические данные проекта: неизменны в течение сессии, клиент обязан
+    // кэшировать (схему берут один раз при навигации, не на каждый кадр).
+    // Remote-реализация вольна передавать сырые байты секций и парсить их
+    // SchemeSectionReader на своей стороне — формы контракта это допускают.
+
+    /// <summary>Список схем проекта (Id + имя) для меню и навигации.</summary>
+    IReadOnlyList<SchemeInfo> GetSchemes();
+
+    /// <summary>Скомпилированная схема по имени: привязки ссылаются на
+    /// <see cref="GetCodePool"/> через CompiledExpressionIndex, пересчёт —
+    /// по эпохам через CompiledTagIndices. KeyNotFoundException, если нет.</summary>
+    Scheme GetScheme(string name);
+
+    /// <summary>Шаблоны для инстанцирования (параметризованные окна, faceplate).</summary>
+    IReadOnlyList<SchemeTemplate> GetTemplates();
+
+    /// <summary>Пул байткода проекта, один на все схемы и правила аварий.</summary>
+    CodePool GetCodePool();
+
+    /// <summary>Разрешение имени тега в TagId: действия схем (WriteTag и т.п.)
+    /// и параметрические ссылки хранят имена, а не Id. Включая системные
+    /// теги (@Alarm.*, диагностику).</summary>
+    bool TryGetTagId(string name, out TagId id);
+
+    /// <summary>Имена ассетов пакета ("symbols/valve.svg", "images/...", "fonts/...").</summary>
+    IReadOnlyList<string> GetAssets();
+
+    /// <summary>Байты ассета. Вызовы редкие, размер может быть большим —
+    /// клиент кэширует (один символ используется многими элементами).</summary>
+    byte[] GetAsset(string path);
 }

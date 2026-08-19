@@ -37,7 +37,8 @@ public static class ProjectWriter
             {
                 FormatVersion = ProjectLoader.CurrentFormatVersion,
                 Name = sourceConfig.Name,
-                Version = sourceConfig.Version
+                Version = sourceConfig.Version,
+                StartScheme = sourceConfig.StartScheme
             },
             ProjectJsonContext.Default.ProjectFile);
 

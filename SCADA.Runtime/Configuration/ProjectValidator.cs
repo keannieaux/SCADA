@@ -25,7 +25,18 @@ public static class ProjectValidator
         ValidateTagIds(config.Tags, errors);
         ValidateNoSystemEntities(config, errors);
         ValidateAlarms(config, errors);
+        ValidateStartScheme(config, errors);
         return errors;
+    }
+
+    private static void ValidateStartScheme(ProjectConfiguration config, List<string> errors)
+    {
+        // стартовый экран обязан существовать: иначе оператор увидит пустое
+        // окно вместо мнемосхемы, и узнает об этом только на объекте
+        if (config.StartScheme is not { Length: > 0 } start)
+            return;
+        if (config.Schemes.All(s => s.Name != start))
+            errors.Add($"Стартовый экран '{start}' не найден среди схем проекта");
     }
 
     private static void ValidateReferences(ProjectConfiguration config, List<string> errors)

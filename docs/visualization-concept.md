@@ -388,11 +388,19 @@ Hosted-контрол — универсальный люк расширения
 @Alarm.<ИмяПравила>.Unacked    0/1
 @Alarm.<ИмяПравила>.Severity   0..3 (low..critical)
 
-@AlarmGroup.<Группа>.AnyActive    0/1   // у правила новое поле Group
-@AlarmGroup.<Группа>.AnyUnacked   0/1
-@AlarmGroup.<Группа>.MaxSeverity  0..3
-@AlarmGroup.<Группа>.Count        N активных
+@AlarmGroup.<Путь>.AnyActive    0/1   // путь — префикс dotted-имени правила
+@AlarmGroup.<Путь>.AnyUnacked   0/1   // («Цех.Секция.Насос7.Перегрев» → группы
+@AlarmGroup.<Путь>.MaxSeverity  0..3  //  «Цех», «Цех.Секция», «Цех.Секция.Насос7»)
+@AlarmGroup.<Путь>.Count        N активных
+
+@AlarmSystem.AnyActive / AnyUnacked / MaxSeverity / Count   // корень дерева
+@AlarmSystem.JournalSizeMb                                  // здоровье подсистемы
 ```
+
+Отдельного поля `Group` у правила нет: иерархия строится из dotted-имён,
+как у тегов — один механизм на весь проект. Перекрёстные группировки
+(«все аварии по насосам независимо от цеха») делаются выражениями над
+тегами правил.
 
 Почему теги, а не функции ВМ (`AlarmActive("…")`): пересчёт схем построен на
 эпохах TagTable — функция, ходящая мимо таблицы, не даст грязного пересчёта и

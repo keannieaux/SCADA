@@ -52,6 +52,69 @@ public class SchemeBuildTests : IDisposable
         File.WriteAllText(Path.Combine(ProjectDir, "templates", fileName), json);
     }
 
+    private void WriteAlarms(string json)
+        => File.WriteAllText(Path.Combine(ProjectDir, "alarms.json"), json);
+
+    [Fact]
+    public void AlarmSystemTags_CompileInSchemeBindings()
+    {
+        // системные теги аварий генерируются до компиляции схем (концепт §10,
+        // §11.4): привязка на @Alarm.*/@AlarmSystem.* — обычная компиляция
+        WriteAlarms("""
+            {
+              "formatVersion": 1,
+              "rules": [{
+                "name": "Котельная.Котёл1.Перегрев", "type": "Threshold",
+                "tagName": "Boiler1.Temp",
+                "limits": [{"kind": "Hi", "value": 80}]
+              }]
+            }
+            """);
+        WriteScheme("overview.scheme", """
+            {
+              "elements": [{
+                "kind": "Rectangle", "x": 0, "y": 0, "width": 100, "height": 50,
+                "bindings": [
+                  {"property": 10, "expression": "@Alarm.Котельная.Котёл1.Перегрев.Active",
+                   "mapping": "Discrete",
+                   "stops": [{"input": 0, "output": "#FF33383D"},
+                             {"input": 1, "output": "#FFFF0000"}]},
+                  {"property": 5, "expression": "@AlarmSystem.AnyUnacked > 0"},
+                  {"property": 1, "expression": "@AlarmGroup.Котельная.Count"}]
+              }]
+            }
+            """);
+
+        var result = ProjectBuildService.Build(ProjectDir, PackagePath);
+
+        Assert.True(result.Success, string.Join("; ",
+            result.Diagnostics.Select(d => d.Message)));
+        using var reader = PackageReader.Open(PackagePath);
+        var scheme = PackageProjectLoader.Load(reader).Schemes.Single();
+        Assert.All(scheme.Elements[0].Bindings,
+            b => Assert.NotNull(b.CompiledExpressionIndex));
+    }
+
+    [Fact]
+    public void UnknownAlarmRuleTag_Fails()
+    {
+        // правила нет — тега нет: висячая ссылка ловится при сборке
+        WriteScheme("overview.scheme", """
+            {
+              "elements": [{
+                "kind": "Rectangle", "x": 0, "y": 0, "width": 100, "height": 50,
+                "bindings": [{"property": 5, "expression": "@Alarm.Нет.Такого.Правила.Active"}]
+              }]
+            }
+            """);
+
+        var result = ProjectBuildService.Build(ProjectDir, PackagePath);
+
+        Assert.False(result.Success);
+        Assert.Contains(result.Diagnostics,
+            d => d.Severity == BuildSeverity.Error && d.Source == "scheme:overview");
+    }
+
     // схема с привязкой-выражением и действием с условием (§11.4)
     private const string OverviewScheme = """
         {

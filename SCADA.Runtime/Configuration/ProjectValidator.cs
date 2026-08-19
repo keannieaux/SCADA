@@ -89,6 +89,13 @@ public static class ProjectValidator
 
         foreach (var rule in config.Alarms.Rules)
         {
+            // имя правила становится частью имён системных тегов (@Alarm.<имя>.*,
+            // концепт §10): обязано быть пригодным для ссылки из выражения
+            if (!AlarmTags.IsValidPathName(rule.Name))
+                errors.Add($"Правило '{rule.Name}': имя недопустимо — оно становится " +
+                           "системным тегом и должно состоять из сегментов-идентификаторов " +
+                           "(буквы/цифры/'_', разделитель '.'), без '@' и пустых сегментов");
+
             if (rule.MinDurationMs < 0)
                 errors.Add($"Правило '{rule.Name}': minDurationMs не может быть отрицательным");
             if (rule.Hysteresis < 0)

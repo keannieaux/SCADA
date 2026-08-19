@@ -48,9 +48,11 @@ public class ProjectLoaderTests : IDisposable
         Assert.Equal("1.0", config.Version);
 
         // загрузчик добавляет диагностику канала (§7.4): 1 устройство + 7 тегов,
-        // и диагностику архива (§7.5): 1 устройство + свой набор метрик
-        Assert.Equal(2 + 7 + ArchiveDiagnostics.MetricDefinitions.Count, config.Tags.Count);
-        Assert.Equal(3, config.Devices.Count);
+        // диагностику архива (§7.5): 1 устройство + свой набор метрик,
+        // и системные теги аварий (A5): псевдодевайс "@Alarms" + корневые метрики
+        Assert.Equal(2 + 7 + ArchiveDiagnostics.MetricDefinitions.Count + SCADA.Core.Alarms.AlarmTags.SystemMetrics.Length,
+            config.Tags.Count);
+        Assert.Equal(4, config.Devices.Count);
         Assert.Single(config.Channels);
         Assert.Equal("@Ch0", config.Devices[1].Name);
         Assert.Equal("@Ch0.Connected", config.Tags[2].Name);

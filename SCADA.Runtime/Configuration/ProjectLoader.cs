@@ -66,6 +66,11 @@ public static class ProjectLoader
         // Id диагностики совпадают между пакетом и рантаймом
         DiagnosticsGenerator.AppendDiagnostics(config);
 
+        // системные теги аварий (концепт §10) — строго после диагностики
+        // (порядок определяет TagId); схемы компилируются против каталога,
+        // уже содержащего @Alarm.*/@AlarmGroup.*/@AlarmSystem.*
+        AlarmTagGenerator.AppendAlarmTags(config);
+
         return config;
     }
 

@@ -19,7 +19,7 @@ public static class Lexer
                 continue;
             }
 
-            if (char.IsLetter(c) || c == '_')
+            if (char.IsLetter(c) || c == '_' || c == '@')
             {
                 tokens.Add(ReadIdentifier(text, ref pos));
                 continue;
@@ -43,7 +43,10 @@ public static class Lexer
     private static Token ReadIdentifier(string text, ref int pos)
     {
         int start = pos;
-        // имя тега: буквы, цифры, точки, подчёркивания — Boiler1.Temp читается целиком
+        // имя тега: буквы, цифры, точки, подчёркивания — Boiler1.Temp читается
+        // целиком; ведущий '@' — системные теги (@Alarm.…, @AlarmGroup.…, §10)
+        if (text[pos] == '@')
+            pos++;
         while (pos < text.Length && (char.IsLetterOrDigit(text[pos]) || text[pos] is '.' or '_'))
             pos++;
         return new Token(TokenKind.Identifier, text[start..pos], start);

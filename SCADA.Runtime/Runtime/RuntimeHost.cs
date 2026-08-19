@@ -215,10 +215,22 @@ public sealed class RuntimeHost : IAsyncDisposable
             config.Alarms, config.Tags, expressionFactory,
             warning => Console.WriteLine(warning));
 
-        var alarmEngine = new AlarmEngine(config.Alarms, preparedRules, tagTable, config.Tags);
+        // системные теги аварий (концепт §10): движок публикует состояние
+        // в TagTable на переходах — схемы вяжутся на них обычными привязками
+        var tagsByName = new Dictionary<string, TagId>(config.Tags.Count);
+        foreach (var tag in config.Tags)
+            tagsByName[tag.Name] = tag.Id;
 
+        var alarmTagPublisher = new AlarmTagPublisher(tagTable,
+            config.Alarms.Rules.Select(r => r.Name),
+            name => tagsByName.TryGetValue(name, out var id) ? id : (TagId?)null);
+
+        var alarmEngine = new AlarmEngine(config.Alarms, preparedRules, tagTable, config.Tags,
+            alarmTagPublisher);
+
+        var eventJournalPath = Path.Combine(projectDirectory, "events.db");
         var eventJournal = new SqliteEventJournal(
-            Path.Combine(projectDirectory, "events.db"),
+            eventJournalPath,
             warning => Console.WriteLine(warning));
         owned.Add(eventJournal);
 
@@ -239,7 +251,15 @@ public sealed class RuntimeHost : IAsyncDisposable
         builder.Services.AddSingleton(alarmBroadcaster);
         builder.Services.AddHostedService(_ => new AlarmPipeline(
             tagTable, alarmEngine, eventJournal, alarmBroadcaster,
-            alarmOptions, journalOptions, warning => Console.WriteLine(warning)));
+            alarmOptions, journalOptions, warning => Console.WriteLine(warning),
+            journalSizeMbTag: tagsByName.TryGetValue(
+                AlarmTags.SystemTag(AlarmTags.JournalSizeMbSuffix), out var sizeTag)
+                ? sizeTag : null,
+            journalSizeBytes: () =>
+            {
+                try { return new FileInfo(eventJournalPath).Length; }
+                catch (IOException) { return 0; }
+            }));
 
         // --- архив (ТЗ §8, docs/archive-format.md) ---
 

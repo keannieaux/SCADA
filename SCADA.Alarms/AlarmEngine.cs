@@ -9,7 +9,8 @@ namespace SCADA.Alarms;
 /// внутренние условия с гистерезисом, наружу агрегируются; рост severity при
 /// активной аварии — эскалация с re-alert. События пишутся только на фронтах;
 /// качество ≠ Good замораживает состояние (§2.10); timestamp события — время
-/// фронта по часам сервера.
+/// фронта по часам сервера. Состояние правил публикуется системными тегами
+/// @Alarm.*/@AlarmGroup.*/@AlarmSystem.* через AlarmTagPublisher (концепт §10).
 /// </summary>
 public sealed class AlarmEngine : IAlarmEngine
 {
@@ -17,15 +18,18 @@ public sealed class AlarmEngine : IAlarmEngine
     private readonly ITagTable _tags;
     private readonly IReadOnlyList<TagDefinition> _tagDefinitions;
     private readonly AlarmConfiguration _config;
+    private readonly AlarmTagPublisher? _tagPublisher;
     private readonly List<RuleRuntime> _runtimes = new();
     private readonly Dictionary<int, List<RuleRuntime>> _byTagIndex = new();
 
     public AlarmEngine(AlarmConfiguration config, IReadOnlyList<PreparedAlarmRule> rules,
-        ITagTable tags, IReadOnlyList<TagDefinition> tagDefinitions)
+        ITagTable tags, IReadOnlyList<TagDefinition> tagDefinitions,
+        AlarmTagPublisher? tagPublisher = null)
     {
         _config = config;
         _tags = tags;
         _tagDefinitions = tagDefinitions;
+        _tagPublisher = tagPublisher;
 
         foreach (var prepared in rules)
         {
@@ -55,10 +59,15 @@ public sealed class AlarmEngine : IAlarmEngine
             foreach (var rt in affected)
             {
                 if (!AllTagsGood(rt))
-                    continue; // §2.10: состояние замораживается
+                {
+                    // §2.10: состояние заморожено — на схеме видно как Uncertain
+                    Publish(rt, Quality.Uncertain, nowUtcMs);
+                    continue;
+                }
 
                 var (cond, highest) = EvaluateCondition(rt);
                 Process(rt, cond, highest, nowUtcMs, events);
+                Publish(rt, Quality.Good, nowUtcMs);
             }
             return events;
         }
@@ -76,6 +85,7 @@ public sealed class AlarmEngine : IAlarmEngine
                 if (!AllTagsGood(rt))
                     continue;
                 TryFireActive(rt, nowUtcMs, events);
+                Publish(rt, Quality.Good, nowUtcMs);
             }
             return events;
         }
@@ -89,9 +99,13 @@ public sealed class AlarmEngine : IAlarmEngine
             foreach (var rt in _runtimes)
             {
                 if (!AllTagsGood(rt))
+                {
+                    Publish(rt, Quality.Uncertain, nowUtcMs);
                     continue;
+                }
                 var (cond, highest) = EvaluateCondition(rt);
                 Process(rt, cond, highest, nowUtcMs, events);
+                Publish(rt, Quality.Good, nowUtcMs);
             }
             return events;
         }
@@ -119,6 +133,7 @@ public sealed class AlarmEngine : IAlarmEngine
             }
 
             rt.AcknowledgedBy = acknowledgedBy;
+            Publish(rt, Quality.Good, nowUtcMs);
 
             return new AlarmEvent(
                 Id: default,
@@ -193,11 +208,20 @@ public sealed class AlarmEngine : IAlarmEngine
                 // простой значение ушло (§7.3)
                 rt.ConditionActive = state.State is AlarmState.ActiveUnack or AlarmState.ActiveAck;
                 rt.ConditionTrueSinceUtcMs = rt.ConditionActive ? state.ActivatedAtUtcMs : null;
+
+                // системные теги отражают восстановленное состояние сразу,
+                // не дожидаясь первой сверки
+                Publish(rt, Quality.Good, state.ActivatedAtUtcMs);
             }
         }
     }
 
     // --- внутрянка ---
+
+    /// <summary>Публикация снимка правила системными тегами (концепт §10);
+    /// писать или нет — решает публикатор сравнением с прошлым снимком.</summary>
+    private void Publish(RuleRuntime rt, Quality quality, long nowUtcMs)
+        => _tagPublisher?.OnRule(rt.Rule.Name, rt.State, rt.Severity, quality, nowUtcMs);
 
     private void AddRuntime(RuleRuntime rt)
     {

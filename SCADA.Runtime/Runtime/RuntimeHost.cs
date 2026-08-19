@@ -8,7 +8,6 @@ using SCADA.Package;
 using SCADA.Package.Sections;
 using SCADA.Runtime.Alarms;
 using SCADA.Runtime.Audit;
-using SCADA.Runtime.Configuration;
 using SCADA.Runtime.Historian;
 using SCADA.Runtime.Hosting;
 using SCADA.Runtime.Polling;
@@ -17,7 +16,7 @@ using SCADA.Runtime.TagTable;
 namespace SCADA.Runtime.Runtime;
 
 /// <summary>
-/// Переиспользуемый composition root исполнения: пакет/проект → конфиг →
+/// Переиспользуемый composition root исполнения: пакет .scadapkg → конфиг →
 /// таблица тегов → движок опроса → сигнализация → архив → клиент.
 /// Внутри — собственный Generic Host; наружу только <see cref="Client"/>,
 /// состояние и жизненный цикл. Связывание повторяет логику, которая раньше
@@ -132,31 +131,24 @@ public sealed class RuntimeHost : IAsyncDisposable
     {
         var builder = Host.CreateApplicationBuilder();
 
-        string projectPath = options.ProjectPath;
+        // Рантайм работает только с собранным пакетом .scadapkg (ТЗ §14.2, A5.9):
+        // единственный путь загрузки — JSON-исходники читают редактор и сборщик,
+        // единственный мост «исходники → пакет» — ProjectBuildService.
+        string packagePath = options.ProjectPath;
+        if (Directory.Exists(packagePath))
+            throw new InvalidOperationException(
+                $"Рантайм исполняет только собранный пакет .scadapkg (A5.9), " +
+                $"получен каталог исходников: {packagePath}. " +
+                "Соберите проект через ProjectBuildService.");
         var owned = new List<IDisposable>();
 
-        ProjectConfiguration config;
-        CodePool? codePool = null;
-        bool devMode = Directory.Exists(projectPath);
-        if (devMode)
-        {
-            // dev-режим: исходный каталог проекта без сборки пакета.
-            // Боевая поставка работает только с .scadapkg (ТЗ §14.2)
-            config = ProjectLoader.Load(projectPath);
-            Console.WriteLine($"[dev] проект загружен из исходного каталога: {projectPath}");
-        }
-        else
-        {
-            using var packageReader = PackageReader.Open(projectPath);
-            config = PackageProjectLoader.Load(packageReader);
-            codePool = PackageProjectLoader.LoadCodePool(packageReader);
-        }
+        using var packageReader = PackageReader.Open(packagePath);
+        ProjectConfiguration config = PackageProjectLoader.Load(packageReader);
+        CodePool codePool = PackageProjectLoader.LoadCodePool(packageReader);
 
         // Изменяемое состояние живёт под папкой проекта (ТЗ §14.6). Для пакета
         // это каталог, в котором он лежит: сам .scadapkg неизменяем.
-        string projectDirectory = devMode
-            ? projectPath
-            : Path.GetDirectoryName(Path.GetFullPath(projectPath))!;
+        string projectDirectory = Path.GetDirectoryName(Path.GetFullPath(packagePath))!;
 
         var tagTable = new global::SCADA.Runtime.TagTable.TagTable(config.Tags.Count);
 
@@ -183,36 +175,26 @@ public sealed class RuntimeHost : IAsyncDisposable
         var journalOptions = options.Journal;
         var alarmOptions = options.Alarms;
 
-        // dev-режим: условия expression-правил компилируются на месте — фабрику
-        // даёт вызывающий, рантайм про компилятор не знает (§5.4). Боевая
-        // поставка получает скомпилированные правила из пакета (§6).
-        Func<AlarmRule, PreparedAlarmRule?>? expressionFactory = null;
-        if (devMode)
+        // Боевая поставка: правила уже скомпилированы в пул code.bin пакета (§6),
+        // компилятора в рантайме нет (§5.4).
+        PreparedAlarmRule? PrepareFromPool(AlarmRule rule)
         {
-            expressionFactory = options.ExpressionFactory;
-        }
-        else if (codePool is not null)
-        {
-            // боевая поставка: правила уже скомпилированы в пул code.bin пакета (§6)
-            expressionFactory = rule =>
+            if (rule.CompiledExpressionIndex is not int index)
             {
-                if (rule.CompiledExpressionIndex is not int index)
-                {
-                    Console.WriteLine(
-                        $"[сигнализация] правило '{rule.Name}': нет скомпилированного условия, правило пропущено");
-                    return null;
-                }
-                return new PreparedAlarmRule
-                {
-                    Rule = rule,
-                    Condition = codePool.ToExpression(index),
-                    TagIndices = codePool.Expressions[index].TagIndices
-                };
+                Console.WriteLine(
+                    $"[сигнализация] правило '{rule.Name}': нет скомпилированного условия, правило пропущено");
+                return null;
+            }
+            return new PreparedAlarmRule
+            {
+                Rule = rule,
+                Condition = codePool.ToExpression(index),
+                TagIndices = codePool.Expressions[index].TagIndices
             };
         }
 
         var preparedRules = AlarmRulePreparer.Prepare(
-            config.Alarms, config.Tags, expressionFactory,
+            config.Alarms, config.Tags, PrepareFromPool,
             warning => Console.WriteLine(warning));
 
         // системные теги аварий (концепт §10): движок публикует состояние

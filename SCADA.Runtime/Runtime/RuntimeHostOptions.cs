@@ -1,5 +1,4 @@
 using SCADA.Alarms;
-using SCADA.Core.Alarms;
 using SCADA.Runtime.Alarms;
 using SCADA.Runtime.Historian;
 
@@ -11,7 +10,9 @@ namespace SCADA.Runtime.Runtime;
 /// </summary>
 public sealed record RuntimeHostOptions
 {
-    /// <summary>Каталог проекта (dev-режим) или путь к .scadapkg (боевая поставка, ТЗ §14.2).</summary>
+    /// <summary>Путь к собранному пакету .scadapkg (боевая поставка, ТЗ §14.2).
+    /// Рантайм работает только с пакетом (A5.9): исходники JSON читают
+    /// редактор и сборщик проекта.</summary>
     public required string ProjectPath { get; init; }
 
     /// <summary>Период опроса устройств.</summary>
@@ -28,12 +29,4 @@ public sealed record RuntimeHostOptions
 
     /// <summary>Пределы запросов истории (§14.1).</summary>
     public HistoryQueryLimits HistoryLimits { get; init; } = new();
-
-    /// <summary>
-    /// dev-режим: компиляция expression-правил на месте (компилятор у
-    /// вызывающего, ТЗ §5.4 — боевая поставка без компилятора).
-    /// null → в dev-режиме expression-правила пропускаются с предупреждением;
-    /// в пакетном режиме используется code.bin и это свойство игнорируется.
-    /// </summary>
-    public Func<AlarmRule, PreparedAlarmRule?>? ExpressionFactory { get; init; }
 }

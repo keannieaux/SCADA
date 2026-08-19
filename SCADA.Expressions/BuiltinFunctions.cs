@@ -25,6 +25,7 @@ public static class BuiltinFunctions
     public const int Min = 3;
     public const int Max = 4;
     public const int Clamp = 5;
+    public const int Now = 6;
 
     private static readonly BuiltinInfo[] _table =
     [
@@ -34,6 +35,9 @@ public static class BuiltinFunctions
         new(nameof(Min), Min, ArgCount: 2, TagRefArgs: [], (args, _) => Math.Min(args[0], args[1])),
         new(nameof(Max), Max, ArgCount: 2, TagRefArgs: [], (args, _) => Math.Max(args[0], args[1])),
         new(nameof(Clamp), Clamp, ArgCount: 3, TagRefArgs: [], (args, _) => Math.Clamp(args[0], args[1], args[2])),
+        // текущее время в СЕКУНДАХ (дробных): анимации вида now() * 90 % 360;
+        // хранится в контексте в unix-мс — как TagValue.TimeStampUtc
+        new(nameof(Now), Now, ArgCount: 0, TagRefArgs: [], (_, ctx) => ctx.NowUnixMs / 1000.0),
     ];
 
     // имена регистронезависимы: isgood(t) и IsGood(t) — одна функция

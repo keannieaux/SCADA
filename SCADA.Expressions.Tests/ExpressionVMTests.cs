@@ -214,6 +214,25 @@ public class ExpressionVMTests
     }
 
     [Fact]
+    public void Evaluate_Now_ReturnsContextTimeInSeconds()
+    {
+        // now() — время из контекста в секундах (B0.4: анимации now() * 90 % 360)
+        var expr = Program([],
+            [Op(OpCode.CallBuiltin), ..I4(BuiltinFunctions.Now), 0,
+             Op(OpCode.Return)]);
+
+        var context = new EvaluationContext
+        {
+            Tags = new TagTable(capacity: 1),
+            NowUnixMs = 1_700_000_000_000L + 2500
+        };
+        Assert.Equal(1_700_000_002.5, ExpressionVM.Evaluate(expr, context));
+
+        // контекст без времени — детерминированный ноль, а не реальные часы
+        Assert.Equal(0.0, ExpressionVM.Evaluate(expr, EmptyContext()));
+    }
+
+    [Fact]
     public void Evaluate_RealScadaExpression_IsGoodAndThreshold()
     {
         // IsGood(Tag0) && Tag0 > 80 — эталонное выражение из ТЗ §11.2

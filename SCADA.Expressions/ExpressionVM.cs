@@ -33,6 +33,9 @@ public static class ExpressionVM
                 case OpCode.Div:
                     stack[--sp - 1] /= stack[sp];
                     break;
+                case OpCode.Mod:
+                    stack[--sp - 1] %= stack[sp];
+                    break;
 
                 // сравнения кладут на стек 1.0 (истина) или 0.0 (ложь) —
                 // отдельного булева типа на стеке нет, всё double

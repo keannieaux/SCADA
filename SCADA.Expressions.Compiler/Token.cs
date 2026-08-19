@@ -3,7 +3,7 @@ namespace SCADA.Expressions.Compiler;
 public enum TokenKind
 {
     Number, Identifier,
-    Plus, Minus, Star, Slash,
+    Plus, Minus, Star, Slash, Percent,
     Greater, GreaterOrEqual, Less, LessOrEqual, EqualEqual, NotEqual,
     AndAnd, OrOr, Bang,
     Question, Colon,

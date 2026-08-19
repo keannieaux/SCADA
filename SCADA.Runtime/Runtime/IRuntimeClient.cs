@@ -21,6 +21,20 @@ public interface IRuntimeClient : ITagValueReader
     // поэтому пакетный метод в контракте с самого начала.
     void Read(ReadOnlySpan<TagId> ids, Span<TagValue> results);
 
+    // --- строковые теги (концепт §4.6, A7) ---
+    //
+    // Строки живут параллельно числам в тех же слотах и эпохах: грязный
+    // пересчёт по GetChangedSince покрывает их без отдельного канала.
+    // Источники строк в v1 — внутренние записи (WriteLocalString); строки из
+    // устройств (OPC UA ноды, ASCII из регистров Modbus/FINS) появятся с
+    // первым строковым драйвером — контракт под это уже готов.
+
+    /// <summary>Чтение строкового тега. Нетронутый тег — StringTagValue.Empty.</summary>
+    StringTagValue ReadString(TagId id);
+
+    /// <summary>Пакетное чтение строк — та же причина, что у числового Read.</summary>
+    void ReadStrings(ReadOnlySpan<TagId> ids, Span<StringTagValue> results);
+
     // --- отслеживание изменений (модель эпох, ТЗ §9.2, §11.7) ---
 
     long CurrentEpoch { get; }
@@ -79,6 +93,11 @@ public interface IRuntimeClient : ITagValueReader
     // Запись во ВНУТРЕННИЕ теги (уставки, режимы). Синхронно и мгновенно,
     // без аудита — системное использование. Операторская запись — WriteTagsAsync.
     void WriteLocal(TagId id, double value);
+
+    /// <summary>Системная запись строкового тега (текстовые статусы, сообщения
+    /// от подсистем). Операторская запись строк появится вместе со строковым
+    /// вариантом TagWriteItem — отдельная задача (поля ввода).</summary>
+    void WriteLocalString(TagId id, string text);
 
     // --- запись в устройства (M7) ---
     //

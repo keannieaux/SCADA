@@ -142,7 +142,13 @@ public sealed partial class PollingEngine
         // состояние на устройство: теги, переиспользуемый буфер, драйвер и backoff
         var states = devices.Select(d =>
         {
-            var tags = _config.Tags.Where(t => t.DeviceId == d.Id).ToArray();
+            // строковые теги драйверам не отдаём (концепт §4.6): их пишут
+            // внутренние сервисы через WriteString, опроса по сети у них нет.
+            // Страховка на случай обхода валидатора; первый строковый драйвер
+            // (OPC UA и т.п.) заменит фильтр на проверку возможности драйвера
+            var tags = _config.Tags
+                .Where(t => t.DeviceId == d.Id && t.DataType != TagDataType.String)
+                .ToArray();
             return new DevicePollState(d, tags, new TagValue[tags.Length]);
         }).ToArray();
 

@@ -1,4 +1,5 @@
 using SCADA.Core.Schemes;
+using SCADA.Core.Tags;
 using SCADA.Package.Builder;
 using SCADA.Package.Sections;
 
@@ -589,5 +590,189 @@ public class SchemeBuildTests : IDisposable
         Assert.False(result.Success);
         Assert.Contains(result.Diagnostics,
             d => d.Severity == BuildSeverity.Error && d.Message.Contains("controlType"));
+    }
+
+    // строковые теги (концепт §4.6, A7): строковый тег живёт на внутреннем
+    // устройстве, привязывается к String-свойству напрямую (без ВМ),
+    // в числовых выражениях запрещён ошибкой сборки
+
+    private void WriteDevicesWithInternal()
+        => File.WriteAllText(Path.Combine(ProjectDir, "devices.json"), """
+            {
+              "formatVersion": 1,
+              "channels": [
+                {"id": 0, "name": "Line1", "channelType": "modbus-tcp", "configuration": "192.168.0.10:502"},
+                {"id": 1, "name": "Local", "channelType": "none"}
+              ],
+              "devices": [
+                {"id": 0, "name": "PLC1", "driverName": "simulator", "channelId": 0},
+                {"id": 1, "name": "Local", "driverName": "internal", "channelId": 1}
+              ]
+            }
+            """);
+
+    private void WriteTagsWithString()
+        => File.WriteAllText(Path.Combine(ProjectDir, "tags.json"), """
+            {
+              "formatVersion": 1,
+              "tags": [
+                {"id": 0, "name": "Boiler1.Temp", "dataType": "analog", "deviceId": 0, "address": "sin:10"},
+                {"id": 1, "name": "Pump1.Running", "dataType": "discrete", "deviceId": 0, "address": "square:5"},
+                {"id": 2, "name": "Status.Text", "dataType": "string", "deviceId": 1}
+              ]
+            }
+            """);
+
+    [Fact]
+    public void DirectStringBinding_CompilesAsDirectReference()
+    {
+        // прямая строковая привязка: без выражения в пуле, прямая ссылка на тег
+        WriteDevicesWithInternal();
+        WriteTagsWithString();
+        WriteScheme("overview.scheme", """
+            {
+              "elements": [{
+                "kind": "Text", "x": 0, "y": 0, "width": 100, "height": 20,
+                "bindings": [{"property": 7, "expression": "Status.Text"}]
+              }]
+            }
+            """);
+
+        var result = ProjectBuildService.Build(ProjectDir, PackagePath);
+
+        Assert.True(result.Success, string.Join("; ",
+            result.Diagnostics.Select(d => d.Message)));
+        using var reader = PackageReader.Open(PackagePath);
+        var scheme = PackageProjectLoader.Load(reader).Schemes.Single();
+        var binding = Assert.Single(scheme.Elements[0].Bindings);
+        Assert.Null(binding.CompiledExpressionIndex);
+        Assert.Equal(new[] { 2 }, binding.CompiledTagIndices);
+    }
+
+    [Fact]
+    public void DirectStringBinding_OnNumericProperty_Fails()
+    {
+        WriteDevicesWithInternal();
+        WriteTagsWithString();
+        WriteScheme("overview.scheme", """
+            {
+              "elements": [{
+                "kind": "Rectangle", "x": 0, "y": 0, "width": 10, "height": 10,
+                "bindings": [{"property": 1, "expression": "Status.Text"}]
+              }]
+            }
+            """);
+
+        var result = ProjectBuildService.Build(ProjectDir, PackagePath);
+
+        Assert.False(result.Success);
+        var diagnostic = Assert.Single(result.Diagnostics,
+            d => d.Severity == BuildSeverity.Error && d.Source == "scheme:overview");
+        Assert.Contains("Status.Text", diagnostic.Message);
+    }
+
+    [Fact]
+    public void StringTagInExpression_Fails()
+    {
+        // ВМ числовая: строковый тег в выражении — ошибка сборки, а не молчаливый
+        // числовой слот
+        WriteDevicesWithInternal();
+        WriteTagsWithString();
+        WriteScheme("overview.scheme", """
+            {
+              "elements": [{
+                "kind": "Rectangle", "x": 0, "y": 0, "width": 10, "height": 10,
+                "bindings": [{"property": 1, "expression": "Status.Text > 0"}]
+              }]
+            }
+            """);
+
+        var result = ProjectBuildService.Build(ProjectDir, PackagePath);
+
+        Assert.False(result.Success);
+        var diagnostic = Assert.Single(result.Diagnostics,
+            d => d.Severity == BuildSeverity.Error && d.Source == "scheme:overview");
+        Assert.Contains("строковый тег", diagnostic.Message);
+    }
+
+    [Fact]
+    public void ThresholdRule_OnStringTag_Fails()
+    {
+        WriteDevicesWithInternal();
+        WriteTagsWithString();
+        WriteAlarms("""
+            {
+              "formatVersion": 1,
+              "rules": [{
+                "name": "Текст.Порог", "type": "Threshold",
+                "tagName": "Status.Text",
+                "limits": [{"kind": "Hi", "value": 80}]
+              }]
+            }
+            """);
+
+        var result = ProjectBuildService.Build(ProjectDir, PackagePath);
+
+        Assert.False(result.Success);
+        Assert.Contains(result.Diagnostics,
+            d => d.Severity == BuildSeverity.Error && d.Message.Contains("строковый"));
+    }
+
+    [Fact]
+    public void StringTag_SurvivesPackageRoundTrip()
+    {
+        WriteDevicesWithInternal();
+        WriteTagsWithString();
+
+        var result = ProjectBuildService.Build(ProjectDir, PackagePath);
+
+        Assert.True(result.Success, string.Join("; ",
+            result.Diagnostics.Select(d => d.Message)));
+        using var reader = PackageReader.Open(PackagePath);
+        var config = PackageProjectLoader.Load(reader);
+        var tag = Assert.Single(config.Tags, t => t.Name == "Status.Text");
+        Assert.Equal(TagDataType.String, tag.DataType);
+    }
+
+    [Fact]
+    public void StringTag_OnExternalDevice_Fails()
+    {
+        // строковых драйверов пока нет: только internal (валидация при загрузке)
+        File.WriteAllText(Path.Combine(ProjectDir, "tags.json"), """
+            {
+              "formatVersion": 1,
+              "tags": [
+                {"id": 0, "name": "Boiler1.Temp", "dataType": "analog", "deviceId": 0, "address": "sin:10"},
+                {"id": 1, "name": "Status.Text", "dataType": "string", "deviceId": 0, "address": "40001"}
+              ]
+            }
+            """);
+
+        var result = ProjectBuildService.Build(ProjectDir, PackagePath);
+
+        Assert.False(result.Success);
+        Assert.Contains(result.Diagnostics,
+            d => d.Severity == BuildSeverity.Error && d.Message.Contains("только на внутренних"));
+    }
+
+    [Fact]
+    public void StringTag_Archived_Fails()
+    {
+        WriteDevicesWithInternal();
+        File.WriteAllText(Path.Combine(ProjectDir, "tags.json"), """
+            {
+              "formatVersion": 1,
+              "tags": [
+                {"id": 0, "name": "Boiler1.Temp", "dataType": "analog", "deviceId": 0, "address": "sin:10"},
+                {"id": 1, "name": "Status.Text", "dataType": "string", "deviceId": 1, "isArchived": true}
+              ]
+            }
+            """);
+
+        var result = ProjectBuildService.Build(ProjectDir, PackagePath);
+
+        Assert.False(result.Success);
+        Assert.Contains(result.Diagnostics,
+            d => d.Severity == BuildSeverity.Error && d.Message.Contains("не архивируются"));
     }
 }

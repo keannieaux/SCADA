@@ -48,17 +48,21 @@ public static class ProjectBuildService
                 return new BuildResult(false, null, diagnostics);
             }
 
+            // строковые теги (концепт §4.6): выражения числовые — страж ловит
+            // строковые теги в выражениях и оформляет прямые строковые привязки
+            var stringGuard = new StringTagGuard(config.Tags);
+
             // M5: expression-правила сигнализации компилируются в общий пул
             // code.bin; правила получают индексы выражений и тегов (§6)
             var allExpressions = new List<CompiledExpression>(expressions ?? []);
-            CompileAlarmRules(config, allExpressions, diagnostics);
+            CompileAlarmRules(config, allExpressions, diagnostics, stringGuard);
             var soundEntries = CollectSoundEntries(config, projectDirectory, diagnostics);
 
             // схемы и шаблоны (docs/visualization-concept.md §11.4): выражения
             // привязок и условий действий — в тот же пул code.bin ДО записи;
             // затем ссылки на теги/шаблоны и ассеты. Все ошибки собираются,
             // пакет при них не пишется.
-            CompileSchemeExpressions(config, allExpressions, diagnostics);
+            CompileSchemeExpressions(config, allExpressions, diagnostics, stringGuard);
             ValidateSchemes(config, diagnostics);
             var schemeAssetEntries = CollectSchemeAssetEntries(config, projectDirectory,
                 diagnostics);
@@ -115,7 +119,8 @@ public static class ProjectBuildService
     /// пакета, а не рантайма, и интегратор должен видеть их разом.
     /// </summary>
     private static void CompileAlarmRules(ProjectConfiguration config,
-        List<CompiledExpression> pool, List<BuildDiagnostic> diagnostics)
+        List<CompiledExpression> pool, List<BuildDiagnostic> diagnostics,
+        StringTagGuard stringGuard)
     {
         if (config.Alarms.Rules.Count == 0)
             return;
@@ -129,6 +134,9 @@ public static class ProjectBuildService
                     // существование тега гарантирует валидация ProjectLoader
                     rule.CompiledTagIndices =
                         [catalog.GetIndex(rule.TagName!, rule.Name)];
+                    stringGuard.CheckCompiled(rule.CompiledTagIndices,
+                        $"alarm:{rule.Name}",
+                        $"Правило сигнализации '{rule.Name}'", diagnostics);
                     break;
 
                 case AlarmType.Expression:
@@ -136,6 +144,9 @@ public static class ProjectBuildService
                     {
                         CompiledExpression compiled =
                             ExpressionCompiler.Compile(rule.Condition!, catalog);
+                        stringGuard.CheckCompiled(compiled.TagIndices,
+                            $"alarm:{rule.Name}",
+                            $"Правило сигнализации '{rule.Name}'", diagnostics);
                         rule.CompiledExpressionIndex = pool.Count; // до дедупликации
                         rule.CompiledTagIndices = compiled.TagIndices;
                         pool.Add(compiled);
@@ -170,7 +181,8 @@ public static class ProjectBuildService
     /// подставляется при раскрытии экземпляра в рантайме (§7, B2).
     /// </summary>
     private static void CompileSchemeExpressions(ProjectConfiguration config,
-        List<CompiledExpression> pool, List<BuildDiagnostic> diagnostics)
+        List<CompiledExpression> pool, List<BuildDiagnostic> diagnostics,
+        StringTagGuard stringGuard)
     {
         if (config.Schemes.Count == 0 && config.Templates.Count == 0)
             return;
@@ -179,22 +191,24 @@ public static class ProjectBuildService
         foreach (var scheme in config.Schemes)
         {
             CompileEventConditions(scheme.Events, scheme.Name, "событие экрана",
-                catalog, pool, diagnostics);
-            CompileSchemeElements(scheme.Name, scheme.Elements, catalog, pool, diagnostics);
+                catalog, pool, diagnostics, stringGuard);
+            CompileSchemeElements(scheme.Name, scheme.Elements, catalog, pool,
+                diagnostics, stringGuard);
         }
         foreach (var template in config.Templates)
         {
             var templateCatalog = new TemplateParameterCatalog(template, catalog);
             CompileEventConditions(template.Events, template.Name, "событие шаблона",
-                templateCatalog, pool, diagnostics);
+                templateCatalog, pool, diagnostics, stringGuard);
             CompileSchemeElements(template.Name, template.Elements,
-                templateCatalog, pool, diagnostics);
+                templateCatalog, pool, diagnostics, stringGuard);
         }
     }
 
     private static void CompileSchemeElements(string schemeName,
         IReadOnlyList<SchemeElement> elements, ITagCatalog catalog,
-        List<CompiledExpression> pool, List<BuildDiagnostic> diagnostics)
+        List<CompiledExpression> pool, List<BuildDiagnostic> diagnostics,
+        StringTagGuard stringGuard)
     {
         for (int i = 0; i < elements.Count; i++)
         {
@@ -203,10 +217,20 @@ public static class ProjectBuildService
 
             foreach (var binding in element.Bindings)
             {
+                // прямая строковая привязка (§4.6): текст — ровно имя
+                // строкового тега → без ВМ, прямая ссылка на тег
+                if (stringGuard.TryDirectBinding(schemeName, label, element,
+                        binding, diagnostics))
+                    continue;
+
                 try
                 {
                     CompiledExpression compiled =
                         ExpressionCompiler.Compile(binding.Expression, catalog);
+                    stringGuard.CheckCompiled(compiled.TagIndices,
+                        $"scheme:{schemeName}",
+                        $"Схема '{schemeName}', элемент {label}, привязка свойства " +
+                        $"{binding.PropertyId}", diagnostics);
                     binding.CompiledExpressionIndex = pool.Count; // до дедупликации
                     binding.CompiledTagIndices = compiled.TagIndices;
                     pool.Add(compiled);
@@ -221,7 +245,7 @@ public static class ProjectBuildService
             }
 
             CompileEventConditions(element.Events, schemeName, $"элемент {label}",
-                catalog, pool, diagnostics);
+                catalog, pool, diagnostics, stringGuard);
         }
     }
 
@@ -229,7 +253,8 @@ public static class ProjectBuildService
     /// элемента — общий механизм, §5.2).</summary>
     private static void CompileEventConditions(IReadOnlyList<SchemeEvent> events,
         string schemeName, string context, ITagCatalog catalog,
-        List<CompiledExpression> pool, List<BuildDiagnostic> diagnostics)
+        List<CompiledExpression> pool, List<BuildDiagnostic> diagnostics,
+        StringTagGuard stringGuard)
     {
         foreach (var schemeEvent in events)
             foreach (var action in schemeEvent.Actions)
@@ -240,6 +265,9 @@ public static class ProjectBuildService
                 {
                     CompiledExpression compiled =
                         ExpressionCompiler.Compile(action.Condition, catalog);
+                    stringGuard.CheckCompiled(compiled.TagIndices,
+                        $"scheme:{schemeName}",
+                        $"Схема '{schemeName}', {context}, условие действия", diagnostics);
                     action.CompiledConditionIndex = pool.Count; // до дедупликации
                     action.CompiledConditionTagIndices = compiled.TagIndices;
                     pool.Add(compiled);
@@ -599,6 +627,68 @@ public static class ProjectBuildService
                 ? index
                 : throw new InvalidOperationException(
                     $"Правило сигнализации '{ruleName}': тег '{name}' не найден");
+    }
+
+    /// <summary>
+    /// Строковые теги при сборке (концепт §4.6): выражения числовые, поэтому
+    /// строковый тег в выражении — ошибка сборки (иначе ВМ молча прочитала бы
+    /// числовой слот). Исключение — прямая строковая привязка: текст привязки,
+    /// в точности равный имени строкового тега, оформляется без ВМ в прямую
+    /// ссылку (CompiledExpressionIndex = null, CompiledTagIndices = [tagId]) и
+    /// допустима только на свойство типа String.
+    /// </summary>
+    private sealed class StringTagGuard
+    {
+        private readonly Dictionary<string, TagDefinition> _byName;
+        private readonly TagDefinition?[] _byIndex;
+
+        public StringTagGuard(IReadOnlyList<TagDefinition> tags)
+        {
+            _byName = tags.ToDictionary(t => t.Name);
+            _byIndex = new TagDefinition?[tags.Count == 0 ? 0 : tags.Max(t => t.Id.Value) + 1];
+            foreach (var tag in tags) _byIndex[tag.Id.Value] = tag;
+        }
+
+        /// <summary>
+        /// Пытается оформить привязку как прямую строковую. Возвращает true,
+        /// если привязка обработана (оформлена или отклонена ошибкой) и
+        /// компилировать её не нужно.
+        /// </summary>
+        public bool TryDirectBinding(string schemeName, string elementLabel,
+            SchemeElement element, ElementBinding binding, List<BuildDiagnostic> diagnostics)
+        {
+            if (!_byName.TryGetValue(binding.Expression.Trim(), out var tag)
+                || tag.DataType != TagDataType.String)
+                return false;
+
+            var def = ElementSchemas.Find(element.Kind, binding.PropertyId);
+            if (def?.Type != PropertyType.String)
+            {
+                diagnostics.Add(new BuildDiagnostic(BuildSeverity.Error, $"scheme:{schemeName}",
+                    $"Схема '{schemeName}', элемент {elementLabel}: прямая привязка строкового " +
+                    $"тега '{tag.Name}' допустима только на свойство типа String " +
+                    $"(свойство {binding.PropertyId} — {def?.Type.ToString() ?? "неизвестно"})"));
+                return true;
+            }
+
+            binding.CompiledExpressionIndex = null;
+            binding.CompiledTagIndices = [tag.Id.Value];
+            return true;
+        }
+
+        /// <summary>Строковый тег в скомпилированном выражении — ошибка сборки.</summary>
+        public void CheckCompiled(int[] tagIndices, string source, string context,
+            List<BuildDiagnostic> diagnostics)
+        {
+            foreach (int index in tagIndices)
+            {
+                if (index < 0 || index >= _byIndex.Length) continue; // -1 — параметрическая заглушка шаблона
+                if (_byIndex[index] is { DataType: TagDataType.String } tag)
+                    diagnostics.Add(new BuildDiagnostic(BuildSeverity.Error, source,
+                        $"{context}: строковый тег '{tag.Name}' не может участвовать в выражении — " +
+                        $"выражения числовые (концепт §4.6, §14)"));
+            }
+        }
     }
 
     /// <summary>

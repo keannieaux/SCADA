@@ -26,7 +26,32 @@ public static class ProjectValidator
         ValidateNoSystemEntities(config, errors);
         ValidateAlarms(config, errors);
         ValidateStartScheme(config, errors);
+        ValidateStringTags(config, errors);
         return errors;
+    }
+
+    // строковые теги (концепт §4.6, A7): v1 — только внутренние. Архив
+    // числовой по природе (история строк при надобности — журнал событий);
+    // строкового драйвера пока нет — первый (OPC UA, Modbus-ASCII) снимет
+    // ограничение «только internal», остальное ядро менять не будет
+    private static void ValidateStringTags(ProjectConfiguration config, List<string> errors)
+    {
+        var driverByDevice = config.Devices.ToDictionary(d => d.Id, d => d.DriverName);
+        foreach (var tag in config.Tags)
+        {
+            if (tag.DataType != TagDataType.String)
+                continue;
+            if (tag.IsArchived)
+                errors.Add($"Тег '{tag.Name}' (id={tag.Id.Value}): строковые теги не архивируются");
+            if (tag.IsWritable)
+                errors.Add($"Тег '{tag.Name}' (id={tag.Id.Value}): операторская запись строк не поддерживается (появится со строковым TagWriteItem)");
+            if (tag.InitValue is not null || tag.IsPersistent)
+                errors.Add($"Тег '{tag.Name}' (id={tag.Id.Value}): InitValue/персистентность для строк не поддерживаются — до первой записи текст пуст (Uncertain)");
+            if (driverByDevice.TryGetValue(tag.DeviceId, out string? driver)
+                && driver != "internal")
+                errors.Add($"Тег '{tag.Name}' (id={tag.Id.Value}): строковые теги поддерживаются " +
+                           "только на внутренних устройствах (internal), строковых драйверов пока нет");
+        }
     }
 
     private static void ValidateStartScheme(ProjectConfiguration config, List<string> errors)
@@ -94,6 +119,10 @@ public static class ProjectValidator
     private static void ValidateAlarms(ProjectConfiguration config, List<string> errors)
     {
         var tagNames = config.Tags.Select(t => t.Name).ToHashSet();
+        // дубликаты имён ловятся своей проверкой — здесь словарь строится
+        // толерантно, чтобы не уронить валидацию исключением
+        var tagTypes = config.Tags.GroupBy(t => t.Name)
+            .ToDictionary(g => g.Key, g => g.First().DataType);
 
         foreach (var group in config.Alarms.Rules.GroupBy(r => r.Name).Where(g => g.Count() > 1))
             errors.Add($"Дубликат имени правила сигнализации '{group.Key}'");
@@ -119,6 +148,9 @@ public static class ProjectValidator
                         errors.Add($"Правило '{rule.Name}': для Threshold не задан tagName");
                     else if (!tagNames.Contains(rule.TagName))
                         errors.Add($"Правило '{rule.Name}': тег '{rule.TagName}' не найден");
+                    else if (tagTypes[rule.TagName] == TagDataType.String)
+                        errors.Add($"Правило '{rule.Name}': тег '{rule.TagName}' строковый — " +
+                                   $"пороговое сравнение по строке не имеет смысла");
 
                     if (rule.Limits is null || rule.Limits.Count == 0)
                     {

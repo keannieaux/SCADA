@@ -33,6 +33,8 @@ public class AlarmTagPublisherTests
 
         public long CurrentEpoch => 0;
         public int GetChangedSince(long epoch, Span<TagId> destination) => 0;
+        public void WriteString(TagId id, StringTagValue value) { }
+        public StringTagValue ReadString(TagId id) => StringTagValue.Empty;
     }
 
     // автораздача TagId по имени — имитация каталога сгенерированных тегов

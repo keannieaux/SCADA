@@ -70,6 +70,14 @@ public sealed class LocalRuntimeClient : IRuntimeClient
             results[i] = _tagTable.Read(ids[i]);
     }
 
+    public StringTagValue ReadString(TagId id) => _tagTable.ReadString(id);
+
+    public void ReadStrings(ReadOnlySpan<TagId> ids, Span<StringTagValue> results)
+    {
+        for (int i = 0; i < ids.Length; i++)
+            results[i] = _tagTable.ReadString(ids[i]);
+    }
+
     public long CurrentEpoch => _tagTable.CurrentEpoch;
 
     public int GetChangedSince(long epoch, Span<TagId> destination)
@@ -77,6 +85,10 @@ public sealed class LocalRuntimeClient : IRuntimeClient
 
     public void WriteLocal(TagId id, double value)
         => _tagTable.Write(id, new TagValue(value, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), Quality.Good));
+
+    public void WriteLocalString(TagId id, string text)
+        => _tagTable.WriteString(id, new StringTagValue(text,
+            DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), Quality.Good));
 
     public async ValueTask<IReadOnlyList<TagWriteResult>> WriteTagsAsync(
         IReadOnlyList<TagWriteItem> items, string requestedBy, CancellationToken ct = default)

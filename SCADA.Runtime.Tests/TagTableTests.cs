@@ -1,4 +1,4 @@
-﻿using SCADA.Core.Tags;
+using SCADA.Core.Tags;
 using SCADA.Runtime.TagTable;
 
 namespace SCADA.Runtime.Tests;
@@ -105,5 +105,59 @@ public class TagTableTests
 
         table.Write(new TagId(5), new TagValue(2, 2, Quality.Good)); // новая запись
         Assert.Equal(1, table.GetChangedSince(checkpoint, buffer));
+    }
+
+    // строковые теги (концепт §4.6): текст лежит в том же слоте,
+    // эпоха изменений общая — отдельного канала для строк нет
+
+    [Fact]
+    public void WriteString_ReadString_RoundTrips()
+    {
+        var table = new TagTable.TagTable(capacity: 10);
+        table.WriteString(new TagId(3), new StringTagValue("Насос работает", 2000, Quality.Good));
+
+        StringTagValue result = table.ReadString(new TagId(3));
+
+        Assert.Equal("Насос работает", result.Text);
+        Assert.Equal(2000, result.TimeStampUtc);
+        Assert.Equal(Quality.Good, result.Quality);
+    }
+
+    [Fact]
+    public void ReadString_BeforeAnyWrite_ReturnsEmpty()
+    {
+        var table = new TagTable.TagTable(capacity: 10);
+
+        StringTagValue result = table.ReadString(new TagId(0));
+
+        Assert.Equal("", result.Text);
+        Assert.Equal(Quality.Uncertain, result.Quality);
+    }
+
+    [Fact]
+    public void WriteString_PreservesNumericValue()
+    {
+        var table = new TagTable.TagTable(capacity: 10);
+        table.Write(new TagId(3), new TagValue(42.5, 1000, Quality.Good));
+
+        table.WriteString(new TagId(3), new StringTagValue("текст", 2000, Quality.Good));
+
+        Assert.Equal(42.5, table.Read(new TagId(3)).Value); // числовое значение не потеряно
+        Assert.Equal("текст", table.ReadString(new TagId(3)).Text);
+    }
+
+    [Fact]
+    public void GetChangedSince_SeesStringWrites()
+    {
+        var table = new TagTable.TagTable(256);
+        long before = table.CurrentEpoch;
+
+        table.WriteString(new TagId(7), new StringTagValue("текст", 1, Quality.Good));
+
+        Span<TagId> buffer = stackalloc TagId[256];
+        int count = table.GetChangedSince(before, buffer);
+
+        Assert.Equal(1, count);
+        Assert.Equal(7, buffer[0].Value);
     }
 }

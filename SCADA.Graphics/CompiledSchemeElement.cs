@@ -9,11 +9,13 @@ public sealed record CompiledBinding(
     PropertyType Type,
     CompiledExpression Expression,
     StopMapping Mapping,
-    IReadOnlyList<Stop>? Stops);
+    IReadOnlyList<Stop>? Stops,
+    bool Volatile);
 
 public sealed record CompiledSchemeElement(
     SchemeElement Source,
     IReadOnlyList<CompiledBinding> Bindings,
     int[] AllTagIndices,
     bool HasFillBinding,
+    bool HasVolatileBindings,
     IReadOnlyList<CompiledSchemeAction>? OnClick);

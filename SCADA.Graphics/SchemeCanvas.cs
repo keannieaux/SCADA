@@ -34,10 +34,12 @@ public sealed class SchemeCanvas : Control
 
     private long _lastEpoch=-1;
     private readonly ConcurrentStack<List<SchemeElementVisual>> _visualsPool=new();
+    private readonly bool _anyVolatile;
 
     public SchemeCanvas(IReadOnlyList<CompiledSchemeElement> elements, IRuntimeClient runtimeClient, int tagCount)
     {
         _runtime=elements.Select(e=>new SchemeElementRuntime(e)).ToArray();
+        _anyVolatile=elements.Any(e=>e.HasVolatileBindings);
         _runtimeClient=runtimeClient;
         _changedBuffer=new TagId[tagCount];
         _changedSet=new bool[tagCount];
@@ -243,7 +245,7 @@ public sealed class SchemeCanvas : Control
     private void Tick()
     {
         long epoch=_runtimeClient.CurrentEpoch;
-        if(epoch==_lastEpoch)
+        if(epoch==_lastEpoch && !_anyVolatile)
             return;
 
         int count=_runtimeClient.GetChangedSince(_lastEpoch,_changedBuffer);
@@ -259,7 +261,7 @@ public sealed class SchemeCanvas : Control
         var sw=Stopwatch.StartNew();
         foreach(var element in _runtime)
         {
-            if (!IsDirty(element.Compiled, _changedSet))
+            if (!element.Compiled.HasVolatileBindings && !IsDirty(element.Compiled, _changedSet))
                 continue;
 
             Recompute(element,evalContext);

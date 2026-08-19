@@ -23,6 +23,7 @@ public static class SchemeLoader
         var bindings=new List<CompiledBinding>(element.Bindings.Count);
         var allTagIndices=new HashSet<int>();
         bool hasFillBinding=false;
+        bool hasVolatile=false;
 
         foreach(var binding in element.Bindings)
         {
@@ -31,13 +32,15 @@ public static class SchemeLoader
                 ?? throw new InvalidOperationException(
                     $"свойство {binding.PropertyId} не найдено у вида {element.Kind} (элемент '{element.Name}')");
 
-            bindings.Add(new CompiledBinding(binding.PropertyId, def.Type, expression, binding.Mapping, binding.Stops));
+            bindings.Add(new CompiledBinding(binding.PropertyId, def.Type, expression, binding.Mapping, binding.Stops, binding.Volatile));
 
             foreach(int index in expression.TagIndices)
                 allTagIndices.Add(index);
 
             if(binding.PropertyId==SchemeProperty.FillLevel)
                 hasFillBinding=true;
+            if(binding.Volatile)
+                hasVolatile=true;
 
         }
 
@@ -53,6 +56,7 @@ public static class SchemeLoader
             Bindings: bindings,
             AllTagIndices: allTagIndices.ToArray(),
             HasFillBinding: hasFillBinding,
+            HasVolatileBindings: hasVolatile,
             OnClick: onClick);
     }
 

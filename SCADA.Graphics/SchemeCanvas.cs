@@ -49,7 +49,9 @@ public sealed class SchemeCanvas : Control
 
     public void StartLive()
     {
-        var timer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(200)};
+        // есть volatile-привязки (анимации от времени) — тик на частоте кадров
+        // ТЗ §4.1 (30 FPS); статичная схема пересчитывается раз в 200 мс (§9.2)
+        var timer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(_anyVolatile ? 33 : 200)};
         timer.Tick+=(_,_)=>Tick();
         timer.Start();
 
@@ -293,7 +295,8 @@ public sealed class SchemeCanvas : Control
         return false;
     }
 
-    private static void Recompute(SchemeElementRuntime element, EvaluationContext context)
+    // public: пересчёт одного элемента доступен headless-замерам (бенчмарки)
+    public static void Recompute(SchemeElementRuntime element, EvaluationContext context)
     {
         foreach (var binding in element.Compiled.Bindings)
         {
@@ -381,19 +384,31 @@ public sealed class SchemeCanvas : Control
         if(!_visualsPool.TryPop(out var visuals))
             visuals=new List<SchemeElementVisual>(_runtime.Length);
         visuals.Clear();
-        var visibleRect=new Rect(-_panX/_zoom, -_panY/_zoom, Bounds.Width/_zoom, Bounds.Height/_zoom);
+        BuildVisuals(_runtime, _panX, _panY, _zoom, Bounds.Width, Bounds.Height,
+            _blinkPhase, visuals);
 
-        foreach (var runtime in _runtime)
+        context.Custom(new SchemeDrawOperation(Bounds,visuals,_panX,_panY,_zoom,_visualsPool));
+    }
+
+    // public static: построение списка визуалов доступно headless-замерам;
+    // viewport — видимый прямоугольник экрана в координатах контрола
+    public static void BuildVisuals(IReadOnlyList<SchemeElementRuntime> runtime,
+        double panX, double panY, double zoom, double viewportWidth, double viewportHeight,
+        bool blinkPhase, List<SchemeElementVisual> visuals)
+    {
+        var visibleRect=new Rect(-panX/zoom, -panY/zoom, viewportWidth/zoom, viewportHeight/zoom);
+
+        foreach (var element in runtime)
         {
-            bool visible=runtime.Get(SchemeProperty.Visible).AsBool;
-            bool showNow=visible && (!runtime.BlinkActive || _blinkPhase);
+            bool visible=element.Get(SchemeProperty.Visible).AsBool;
+            bool showNow=visible && (!element.BlinkActive || blinkPhase);
             if(!showNow)
                 continue;
 
-            var source=runtime.Compiled.Source;
-            double offsetX=runtime.Get(SchemeProperty.PositionOffsetX).Number;
-            double offsetY=runtime.Get(SchemeProperty.PositionOffsetY).Number;
-            double rotation=runtime.Get(SchemeProperty.Rotation).Number;
+            var source=element.Compiled.Source;
+            double offsetX=element.Get(SchemeProperty.PositionOffsetX).Number;
+            double offsetY=element.Get(SchemeProperty.PositionOffsetY).Number;
+            double rotation=element.Get(SchemeProperty.Rotation).Number;
             var bounds=new Rect(source.X+offsetX,source.Y+offsetY,source.Width,source.Height);
             if (rotation != 0)
             {
@@ -408,22 +423,20 @@ public sealed class SchemeCanvas : Control
                 continue;
 
             string? symbolPath=source.Kind==ElementKind.Symbol
-                ? ResolveSymbolPath(runtime.Get(SchemeProperty.SymbolName).Text)
+                ? ResolveSymbolPath(element.Get(SchemeProperty.SymbolName).Text)
                 : null;
 
             visuals.Add(new SchemeElementVisual(
                 Bounds: bounds,
-                Fill: ToSkColor(runtime.Get(SchemeProperty.FillColor)),
-                QualityBad: runtime.QualityBad,
+                Fill: ToSkColor(element.Get(SchemeProperty.FillColor)),
+                QualityBad: element.QualityBad,
                 Kind: source.Kind,
                 RotationDegrees: rotation,
-                HasFillLevel: runtime.Compiled.HasFillBinding,
-                FillLevel: runtime.Get(SchemeProperty.FillLevel).Number,
-                Text: runtime.Get(SchemeProperty.Text).Text ?? "",
+                HasFillLevel: element.Compiled.HasFillBinding,
+                FillLevel: element.Get(SchemeProperty.FillLevel).Number,
+                Text: element.Get(SchemeProperty.Text).Text ?? "",
                 SymbolPath: symbolPath));
         }
-
-        context.Custom(new SchemeDrawOperation(Bounds,visuals,_panX,_panY,_zoom,_visualsPool));
     }
 
     private static string? ResolveSymbolPath(string? symbolName)

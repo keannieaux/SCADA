@@ -71,6 +71,9 @@ public static class SchemeFileLoader
 
             if (isTemplate)
             {
+                if (file.RequiredRight is not null)
+                    errors.Add($"{source}: requiredRight допустим только у схем " +
+                        "(попап открывается действием — право ставится на действие)");
                 templates.Add(new SchemeTemplate
                 {
                     Id = file.Id ?? Guid.NewGuid(),
@@ -89,6 +92,7 @@ public static class SchemeFileLoader
                 {
                     Id = file.Id ?? Guid.NewGuid(),
                     Name = file.Name ?? Path.GetFileNameWithoutExtension(path),
+                    RequiredRight = file.RequiredRight,
                     Properties = properties,
                     Events = events,
                     Elements = elements
@@ -196,7 +200,9 @@ public static class SchemeFileLoader
             TemplateParameters = dto.TemplateParameters,
             Properties = properties,
             Bindings = bindings,
-            Events = events
+            Events = events,
+            RequiredRight = dto.RequiredRight,
+            DeniedState = dto.DeniedState
         };
     }
 
@@ -304,7 +310,13 @@ public static class SchemeFileLoader
         };
 
         if (action is not null)
-            action = action with { Condition = dto.Condition, Confirmation = dto.Confirm };
+            action = action with
+            {
+                Condition = dto.Condition,
+                Confirmation = dto.Confirm,
+                RequiredRight = dto.RequiredRight,
+                DeniedFeedback = dto.DeniedFeedback
+            };
         return action;
     }
 

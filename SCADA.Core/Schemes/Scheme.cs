@@ -9,6 +9,14 @@ public sealed class Scheme
     public required Guid Id { get; init; }
     public required string Name { get; init; }
 
+    /// <summary>Право, без которого схема не открывается и не показывается
+    /// в списке экранов (docs/users-plan.md §5). null — ограничений нет.
+    /// Права на элементах закрыть экран целиком не могут: схема открывается
+    /// не только кнопкой, но и как стартовая, и из списка.
+    /// У шаблонов такого поля нет — попап открывается действием, право
+    /// ставится на действие.</summary>
+    public string? RequiredRight { get; init; }
+
     /// <summary>Свойства уровня схемы (фон, размер, стартовый зум) —
     /// разреженные, схема дескрипторов ElementSchemas.SchemeProperties.</summary>
     public IReadOnlyList<ElementProperty> Properties { get; init; } = [];

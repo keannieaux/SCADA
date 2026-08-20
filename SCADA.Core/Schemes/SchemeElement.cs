@@ -42,4 +42,16 @@ public sealed class SchemeElement
     /// <summary>Только для Kind = Instance: имя шаблона и параметры (§7).</summary>
     public string? TemplateName { get; init; }
     public IReadOnlyDictionary<string, string>? TemplateParameters { get; init; }
+
+    /// <summary>Право, без которого элемент недоступен (docs/users-plan.md §5).
+    /// null — ограничений нет. Право строкой, а не параметром шаблона:
+    /// параметрическое право нельзя сверить с ролями при сборке, и опечатка
+    /// всплыла бы на объекте.
+    /// Права только сужают: право группы не отменяет право ребёнка, право
+    /// экземпляра — прав элементов внутри шаблона; проверяются все.</summary>
+    public string? RequiredRight { get; init; }
+
+    /// <summary>Как выглядит элемент без права. Значимо только при
+    /// заданном <see cref="RequiredRight"/>.</summary>
+    public DeniedState DeniedState { get; init; } = DeniedState.Disabled;
 }

@@ -189,8 +189,12 @@ public sealed class RuntimeHost : IAsyncDisposable
                 $"'{UserStore.DefaultAdminLogin}' с паролем по умолчанию — смените его");
 
         var sessions = new SessionService(userStore, config.Users, options.AuthMode);
+        // проверки прав в ядре (§5): в режиме Local встроенный администратор
+        // разрешает всё — поведение существующих запусков не меняется
+        var accessControl = new SessionAccessControl(sessions);
         builder.Services.AddSingleton<IUserStore>(userStore);
         builder.Services.AddSingleton<ISessionService>(sessions);
+        builder.Services.AddSingleton<IAccessControl>(accessControl);
         builder.Services.AddHostedService<SessionHostService>();
 
         // --- сигнализация (M5, docs/M5-plan.md) ---
@@ -341,7 +345,8 @@ public sealed class RuntimeHost : IAsyncDisposable
 
             builder.Services.AddSingleton<IRuntimeClient>(sp =>
                 new LocalRuntimeClient(tagTable, sp.GetRequiredService<IHistorian>(), queryLimits,
-                    alarmEngine, eventJournal, alarmBroadcaster, engine, schemeCatalog));
+                    alarmEngine, eventJournal, alarmBroadcaster, engine, schemeCatalog,
+                    accessControl, auditJournal));
 
             Console.WriteLine($"[архив] каталог: {archiveRoot}");
         }
@@ -351,7 +356,7 @@ public sealed class RuntimeHost : IAsyncDisposable
             // диагностика работают, тренды показывают пустоту вместо падения.
             builder.Services.AddSingleton<IRuntimeClient>(new LocalRuntimeClient(
                 tagTable, null, queryLimits, alarmEngine, eventJournal, alarmBroadcaster,
-                engine, schemeCatalog));
+                engine, schemeCatalog, accessControl, auditJournal));
             Console.WriteLine("[архив] выключен настройкой Runtime:Archive:Enabled");
         }
 

@@ -20,7 +20,9 @@ namespace SCADA.Runtime.Configuration;
                  typeof(JsonStringEnumConverter<ElementKind>),
                  typeof(JsonStringEnumConverter<StopMapping>),
                  typeof(JsonStringEnumConverter<SchemeEventKind>),
-                 typeof(JsonStringEnumConverter<TemplateParameterType>)])]
+                 typeof(JsonStringEnumConverter<TemplateParameterType>),
+                 typeof(JsonStringEnumConverter<DeniedState>),
+                 typeof(JsonStringEnumConverter<DeniedFeedback>)])]
 
 [JsonSerializable(typeof(TagDefinition))]
 [JsonSerializable(typeof(ProjectFile))]

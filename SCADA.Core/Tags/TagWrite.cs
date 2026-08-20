@@ -22,7 +22,11 @@ public enum TagWriteStatus : byte
     /// Пакет с таким элементом отклоняется целиком, до записи (§13).</summary>
     ValidationFailed = 6,
     /// <summary>Прочая ошибка исполнения.</summary>
-    Failed = 7
+    Failed = 7,
+    /// <summary>У сессии нет права на операторскую запись (Operate,
+    /// docs/users-plan.md §5). Значение добавлено в конец: коды
+    /// существующих статусов не двигаются.</summary>
+    Denied = 8
 }
 
 /// <summary>Результат записи одного тега.</summary>

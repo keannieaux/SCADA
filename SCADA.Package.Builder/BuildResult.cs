@@ -15,7 +15,7 @@ public enum BuildSeverity
 
 /// <summary>
 /// Структурированная диагностика сборки для панели «Проблемы» в IDE.
-/// <paramref name="Source"/> — источник: project / alarm:&lt;имя правила&gt; /
+/// <paramref name="Source"/> — источник: project / alarm:&lt;имя правила&gt; / rights /
 /// alarms:sounds / archive / build.
 /// </summary>
 public sealed record BuildDiagnostic(BuildSeverity Severity, string Source, string Message);

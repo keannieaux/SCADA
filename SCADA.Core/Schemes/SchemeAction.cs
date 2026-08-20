@@ -17,6 +17,16 @@ public abstract record SchemeAction
     /// подтверждение сам, действие — дополнительно.</summary>
     public string? Confirmation { get; init; }
 
+    /// <summary>Право, без которого действие не выполняется
+    /// (docs/users-plan.md §5). null — ограничений нет. Право на элементе
+    /// и право на действии проверяются оба: разрешение видеть кнопку
+    /// не означает разрешения ею пользоваться.</summary>
+    public string? RequiredRight { get; init; }
+
+    /// <summary>Что показать оператору при отказе. Значимо только при
+    /// заданном <see cref="RequiredRight"/>.</summary>
+    public DeniedFeedback DeniedFeedback { get; init; } = DeniedFeedback.Notify;
+
     // --- заполняется при сборке пакета ---
     public int? CompiledConditionIndex { get; set; }
     public int[]? CompiledConditionTagIndices { get; set; }

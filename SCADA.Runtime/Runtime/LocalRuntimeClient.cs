@@ -1,12 +1,15 @@
 using SCADA.Alarms;
 using SCADA.Core.Schemes;
 using SCADA.Core.Tags;
+using SCADA.Core.Users;
 using SCADA.Package.Sections;
 using SCADA.Runtime.Alarms;
+using SCADA.Runtime.Audit;
 using SCADA.Runtime.Historian;
 using SCADA.Runtime.Polling;
 using SCADA.Runtime.Schemes;
 using SCADA.Runtime.TagTable;
+using SCADA.Runtime.Users;
 
 namespace SCADA.Runtime.Runtime;
 
@@ -25,6 +28,8 @@ public sealed class LocalRuntimeClient : IRuntimeClient
     private readonly AlarmChangeBroadcaster? _alarmBroadcaster;
     private readonly PollingEngine? _pollingEngine;
     private readonly SchemeCatalog? _schemeCatalog;
+    private readonly IAccessControl? _access;
+    private readonly IAuditJournal? _audit;
 
     /// <param name="historian">
     /// null, если архив выключен: тогда запросы истории отдают пустые ряды,
@@ -42,6 +47,15 @@ public sealed class LocalRuntimeClient : IRuntimeClient
     /// null только в unit-тестах клиента: методы схем отдают пустые результаты,
     /// GetScheme/GetAsset — KeyNotFoundException.
     /// </param>
+    /// <param name="access">
+    /// null = проверок прав нет, поведение прежнее (unit-тесты, сборки без
+    /// подсистемы пользователей). Подключён — операторская запись требует
+    /// Operate, квитирование AckAlarms (docs/users-plan.md §5).
+    /// </param>
+    /// <param name="audit">
+    /// журнал для отказов: попытка без права — тоже событие (§7). Успешные
+    /// записи аудирует движок опроса, он же знает старые значения.
+    /// </param>
     public LocalRuntimeClient(
         ITagTable tagTable,
         IHistorian? historian = null,
@@ -50,7 +64,9 @@ public sealed class LocalRuntimeClient : IRuntimeClient
         IEventJournal? eventJournal = null,
         AlarmChangeBroadcaster? alarmBroadcaster = null,
         PollingEngine? pollingEngine = null,
-        SchemeCatalog? schemeCatalog = null)
+        SchemeCatalog? schemeCatalog = null,
+        IAccessControl? access = null,
+        IAuditJournal? audit = null)
     {
         _tagTable = tagTable;
         _historian = historian;
@@ -60,6 +76,8 @@ public sealed class LocalRuntimeClient : IRuntimeClient
         _alarmBroadcaster = alarmBroadcaster;
         _pollingEngine = pollingEngine;
         _schemeCatalog = schemeCatalog;
+        _access = access;
+        _audit = audit;
     }
 
     public TagValue Read(TagId id) => _tagTable.Read(id);
@@ -93,6 +111,24 @@ public sealed class LocalRuntimeClient : IRuntimeClient
     public async ValueTask<IReadOnlyList<TagWriteResult>> WriteTagsAsync(
         IReadOnlyList<TagWriteItem> items, string requestedBy, CancellationToken ct = default)
     {
+        if (_access is not null)
+        {
+            if (!_access.HasPermission(SystemPermissions.Operate))
+            {
+                // отказ — тоже событие аудита (§7): «пытались, не дали»
+                AuditDenied("tag-write", SystemPermissions.Operate,
+                    items.Select(i => (TagName(i.TagId), (double?)i.Value)));
+                return items.Select(_ => new TagWriteResult(
+                    TagWriteStatus.Denied,
+                    $"недостаточно прав (требуется: {SystemPermissions.Operate})")).ToArray();
+            }
+
+            // в аудит идёт логин сессии, а не строка от вызывающего:
+            // клиент может прислать что угодно, ядро знает, кто вошёл
+            requestedBy = _access.CurrentLogin;
+            _access.NoteActivity();
+        }
+
         // без движка опроса записывать некуда — внятный отказ, а не падение
         if (_pollingEngine is null)
             return items.Select(_ => new TagWriteResult(
@@ -198,6 +234,25 @@ public sealed class LocalRuntimeClient : IRuntimeClient
         IEnumerable<string> ruleNames, string acknowledgedBy,
         string? comment = null, CancellationToken ct = default)
     {
+        // право проверяется до состояния подсистемы: отказ фиксируется
+        // одинаково, есть в проекте аварии или нет
+        if (_access is not null)
+        {
+            // список перечисляется дважды (аудит отказа и квитирование) —
+            // материализуем, вызывающий мог передать ленивый запрос
+            var names = ruleNames as IReadOnlyList<string> ?? ruleNames.ToArray();
+            if (!_access.HasPermission(SystemPermissions.AckAlarms))
+            {
+                AuditDenied("alarm-ack", SystemPermissions.AckAlarms,
+                    names.Select(name => (name, (double?)null)));
+                return ValueTask.CompletedTask;
+            }
+
+            acknowledgedBy = _access.CurrentLogin;
+            _access.NoteActivity();
+            ruleNames = names;
+        }
+
         if (_alarmEngine is null)
             return ValueTask.CompletedTask;
 
@@ -250,6 +305,41 @@ public sealed class LocalRuntimeClient : IRuntimeClient
     public byte[] GetAsset(string path)
         => _schemeCatalog?.GetAsset(path)
             ?? throw new KeyNotFoundException($"Ассет '{path}' не найден");
+
+    /// <summary>Запись отказа в аудит: одна строка на каждую цель попытки,
+    /// связанные общим BatchId — как у обычной пакетной записи (§7).</summary>
+    private void AuditDenied(string action, string permission,
+        IEnumerable<(string Target, double? NewValue)> targets)
+    {
+        if (_audit is null)
+            return;
+
+        long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        string batchId = Guid.NewGuid().ToString("N");
+        string user = _access?.CurrentLogin ?? string.Empty;
+
+        _audit.Append(targets.Select(t => new AuditEntry(
+            TimestampUtcMs: now,
+            User: user,
+            Action: action,
+            Target: t.Target,
+            OldValue: null,
+            NewValue: t.NewValue,
+            Result: nameof(TagWriteStatus.Denied),
+            Detail: $"недостаточно прав (требуется: {permission})",
+            BatchId: batchId)).ToArray());
+    }
+
+    /// <summary>Имя тега для аудита. Обратный поиск по каталогу — путь
+    /// отказа, он редкий; на успешной записи имена берёт движок опроса.</summary>
+    private string TagName(TagId id)
+    {
+        if (_schemeCatalog is not null)
+            foreach (var (name, tagId) in _schemeCatalog.TagsByName)
+                if (tagId == id)
+                    return name;
+        return id.ToString();
+    }
 
     private static async IAsyncEnumerable<AlarmChange> EmptyAlarmChanges(
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)

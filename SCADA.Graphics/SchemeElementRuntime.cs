@@ -2,7 +2,7 @@ using SCADA.Core.Schemes;
 
 namespace SCADA.Graphics;
 
-internal sealed class SchemeElementRuntime
+public sealed class SchemeElementRuntime
 {
     public CompiledSchemeElement Compiled {get;}
     public bool QualityBad {get;set;}

@@ -4,6 +4,7 @@
     <ProjectReference Include="..\SCADA.Runtime\SCADA.Runtime.csproj" />
     <ProjectReference Include="..\SCADA.Expressions\SCADA.Expressions.csproj" />
     <ProjectReference Include="..\SCADA.Drivers.Simulator\SCADA.Drivers.Simulator.csproj" />
+    <ProjectReference Include="..\SCADA.Graphics\SCADA.Graphics.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -10,6 +10,8 @@ public sealed class SchemeElementRuntime
 
     private readonly PropertyValue[] _values;
     private readonly Dictionary<int, int> _slotByPropertyId;
+    private double _lastTextRaw;
+    private string? _lastText;
 
     public SchemeElementRuntime(CompiledSchemeElement compiled)
     {
@@ -32,4 +34,22 @@ public sealed class SchemeElementRuntime
 
     public PropertyValue Get(int propertyId)=>_values[_slotByPropertyId[propertyId]];
     public void Set(int propertyId, PropertyValue value) => _values[_slotByPropertyId[propertyId]]=value;
+
+    public bool TryGetCachedText(double raw,out string text)
+    {
+        if(_lastText is not null && raw.Equals(_lastTextRaw))
+        {
+            text=_lastText;
+            return true;
+        }
+
+        text="";
+        return false;
+    }
+
+    public void CacheText(double raw,string text)
+    {
+        _lastTextRaw=raw;
+        _lastText=text;
+    }
 }

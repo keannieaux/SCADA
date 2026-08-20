@@ -1,13 +1,13 @@
 using SCADA.Core.Schemes;
 using SCADA.Core.Tags;
-using SCADA.Expressions.Compiler;
+using SCADA.Expressions;
 
 namespace SCADA.Graphics;
 
 public sealed record CompiledBinding(
     int PropertyId,
     PropertyType Type,
-    CompiledExpression Expression,
+    Expression Expression,
     StopMapping Mapping,
     IReadOnlyList<Stop>? Stops,
     bool Volatile);

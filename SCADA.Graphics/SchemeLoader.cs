@@ -32,7 +32,7 @@ public static class SchemeLoader
                 ?? throw new InvalidOperationException(
                     $"свойство {binding.PropertyId} не найдено у вида {element.Kind} (элемент '{element.Name}')");
 
-            bindings.Add(new CompiledBinding(binding.PropertyId, def.Type, expression, binding.Mapping, binding.Stops, binding.Volatile));
+            bindings.Add(new CompiledBinding(binding.PropertyId, def.Type, expression.ToExpression(), binding.Mapping, binding.Stops, binding.Volatile));
 
             foreach(int index in expression.TagIndices)
                 allTagIndices.Add(index);

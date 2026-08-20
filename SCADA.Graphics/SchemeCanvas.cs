@@ -10,6 +10,7 @@ using SkiaSharp;
 using System.Diagnostics;
 using Avalonia.Input;
 using System.Collections.Concurrent;
+using System.IO.Pipelines;
 
 namespace SCADA.Graphics;
 
@@ -35,11 +36,16 @@ public sealed class SchemeCanvas : Control
     private long _lastEpoch=-1;
     private readonly ConcurrentStack<List<SchemeElementVisual>> _visualsPool=new();
     private readonly bool _anyVolatile;
+    private readonly SchemeElementRuntime[] _dynamic;
+    private readonly SchemeElementRuntime[] _static;
+    private SKPicture? _staticPicture;
 
     public SchemeCanvas(IReadOnlyList<CompiledSchemeElement> elements, IRuntimeClient runtimeClient, int tagCount)
     {
         _runtime=elements.Select(e=>new SchemeElementRuntime(e)).ToArray();
         _anyVolatile=elements.Any(e=>e.HasVolatileBindings);
+        _dynamic=_runtime.Where(e=>e.Compiled.Bindings.Count>0).ToArray();
+        _static=_runtime.Where(e=>e.Compiled.Bindings.Count==0).ToArray();
         _runtimeClient=runtimeClient;
         _changedBuffer=new TagId[tagCount];
         _changedSet=new bool[tagCount];
@@ -298,14 +304,23 @@ public sealed class SchemeCanvas : Control
     // public: пересчёт одного элемента доступен headless-замерам (бенчмарки)
     public static void Recompute(SchemeElementRuntime element, EvaluationContext context)
     {
-        foreach (var binding in element.Compiled.Bindings)
+        var bindings=element.Compiled.Bindings;
+        for(int i = 0; i < bindings.Count; i++)
         {
-            double raw=ExpressionVM.Evaluate(binding.Expression.ToExpression(), context);
-            element.Set(binding.PropertyId, MapValue(binding, raw, element));
+            var binding=bindings[i];
+            double raw=ExpressionVM.Evaluate(binding.Expression, context);
+            element.Set(binding.PropertyId,MapValue(binding,raw,element));
         }
 
-        element.QualityBad=element.Compiled.AllTagIndices
-            .Any(index => context.Tags.Read(new TagId(index)).Quality != Quality.Good);
+        bool qualityBad=false;
+        foreach(int index in element.Compiled.AllTagIndices)
+            if(context.Tags.Read(new TagId(index)).Quality != Quality.Good)
+            {
+                qualityBad=true;
+                break;
+            }
+
+        element.QualityBad=qualityBad;
         element.BlinkActive=element.Get(SchemeProperty.Blink).AsBool;
     }
 
@@ -330,9 +345,9 @@ public sealed class SchemeCanvas : Control
     private static PropertyValue PickDiscrete(IReadOnlyList<Stop> stops, double raw)
     {
         var result=stops[0];
-        foreach (var stop in stops)
-            if (raw>=stop.Input)
-                result=stop;
+        for(int i=0;i<stops.Count;i++)
+            if (raw>=stops[i].Input)
+                result=stops[i];
         return result.Output;
     }
 
@@ -373,21 +388,40 @@ public sealed class SchemeCanvas : Control
 
     private static string FormatText(double raw, SchemeElementRuntime element)
     {
+        if(element.TryGetCachedText(raw,out string cached))
+            return cached;
+
         string format=element.Get(SchemeProperty.TextFormat).Text ?? "F1";
         string units=element.Get(SchemeProperty.Units).Text ?? "";
         string formatted=raw.ToString(format);
-        return string.IsNullOrEmpty(units) ? formatted : $"{formatted} {units}";
+        string result=string.IsNullOrEmpty(units)?formatted:$"{formatted} {units}";
+
+        element.CacheText(raw,result);
+        return result;
     }
 
     public override void Render(DrawingContext context)
     {
+        _staticPicture??=RecordStatic();
+
         if(!_visualsPool.TryPop(out var visuals))
-            visuals=new List<SchemeElementVisual>(_runtime.Length);
+            visuals=new List<SchemeElementVisual>(_dynamic.Length);
         visuals.Clear();
-        BuildVisuals(_runtime, _panX, _panY, _zoom, Bounds.Width, Bounds.Height,
+        BuildVisuals(_dynamic, _panX, _panY, _zoom, Bounds.Width, Bounds.Height,
             _blinkPhase, visuals);
 
-        context.Custom(new SchemeDrawOperation(Bounds,visuals,_panX,_panY,_zoom,_visualsPool));
+        context.Custom(new SchemeDrawOperation(Bounds,visuals,_panX,_panY,_zoom,_visualsPool,_staticPicture));
+    }
+
+    private SKPicture RecordStatic()
+    {
+        var visuals=new List<SchemeElementVisual>(_static.Length);
+        BuildVisuals(_static, 500_000,500_000,1,1_000_000,1_000_000,true,visuals);
+
+        using var recorder=new SKPictureRecorder();
+        var canvas=recorder.BeginRecording(new SKRect(-500_000,-500_000,500_000,500_000));
+        SchemeDrawOperation.DrawItems(canvas,visuals,0,0,1);
+        return recorder.EndRecording();
     }
 
     // public static: построение списка визуалов доступно headless-замерам;

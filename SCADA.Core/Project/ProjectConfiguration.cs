@@ -3,6 +3,7 @@ using SCADA.Core.Channels;
 using SCADA.Core.Devices;
 using SCADA.Core.Schemes;
 using SCADA.Core.Tags;
+using SCADA.Core.Users;
 
 public class ProjectConfiguration
 {
@@ -28,4 +29,9 @@ public class ProjectConfiguration
     /// (project.json → манифест пакета → SchemeInfo.IsStart). null — UI
     /// открывает первый экран по алфавиту.</summary>
     public string? StartScheme { get; set; }
+
+    /// <summary>Роли и политики подсистемы пользователей (docs/users-plan.md).
+    /// Пустые роли = проект без разграничения (AuthMode.Local). Пользователей
+    /// здесь нет — они живут в users.json в папке проекта (§3).</summary>
+    public UsersConfiguration Users { get; set; } = new();
 }

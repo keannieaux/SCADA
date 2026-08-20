@@ -1,6 +1,7 @@
 using SCADA.Core.Alarms;
 using SCADA.Core.Schemes;
 using SCADA.Core.Tags;
+using SCADA.Core.Users;
 using SCADA.Expressions.Compiler;
 using SCADA.Package.Builder.Sections;
 using SCADA.Runtime.Configuration;
@@ -85,6 +86,14 @@ public static class ProjectBuildService
                     foreach (var (entry, bytes) in soundEntries)
                         writer.AddEntry(entry, bytes);
                 }
+
+                // роли проекта (docs/users-plan.md §4.1): секция опциональна —
+                // проект без roles.json собирается без неё. Условие — наличие
+                // файла, а не непустой список ролей: иначе политики (таймаут,
+                // длина пароля) из roles.json с пустыми ролями молча терялись
+                // бы. Пользователей в пакете нет и не будет (§3)
+                if (config.Users.IsConfigured)
+                    writer.AddEntry("roles.bin", RolesSectionWriter.Write(config.Users));
 
                 // схемы и шаблоны — секциями schemes/<имя>.bin / templates/<имя>.bin,
                 // перечисление на чтении — через манифест (§11.1)
@@ -346,6 +355,81 @@ public static class ProjectBuildService
         }
 
         ValidateTemplateCycles(templatesByName, diagnostics);
+        ValidateSchemeRights(config, diagnostics);
+    }
+
+    /// <summary>
+    /// Сверка прав, использованных на схемах, с правами ролей проекта
+    /// (docs/users-plan.md §5). Право, которого нет ни у одной роли, — почти
+    /// всегда опечатка: «Уставки.Еdit» с русской «е» ничем не отличается на
+    /// вид, а на объекте кнопка молча не работает.
+    /// Это предупреждение, а не ошибка: проектные права — произвольные строки,
+    /// роль может появиться позже, а сборка не должна падать из-за этого.
+    /// </summary>
+    private static void ValidateSchemeRights(ProjectConfiguration config,
+        List<BuildDiagnostic> diagnostics)
+    {
+        var used = new SortedDictionary<string, SortedSet<string>>(StringComparer.Ordinal);
+
+        void Use(string? right, string where)
+        {
+            if (string.IsNullOrWhiteSpace(right))
+                return;
+            if (!used.TryGetValue(right, out var places))
+                used[right] = places = new SortedSet<string>(StringComparer.Ordinal);
+            places.Add(where);
+        }
+
+        void UseEvents(IReadOnlyList<SchemeEvent> events, string where)
+        {
+            foreach (var schemeEvent in events)
+                foreach (var action in schemeEvent.Actions)
+                    Use(action.RequiredRight, where);
+        }
+
+        void UseElements(IReadOnlyList<SchemeElement> elements, string where)
+        {
+            foreach (var element in elements)
+            {
+                Use(element.RequiredRight, where);
+                UseEvents(element.Events, where);
+            }
+        }
+
+        foreach (var scheme in config.Schemes)
+        {
+            Use(scheme.RequiredRight, $"экран '{scheme.Name}'");
+            UseEvents(scheme.Events, $"экран '{scheme.Name}'");
+            UseElements(scheme.Elements, $"экран '{scheme.Name}'");
+        }
+        foreach (var template in config.Templates)
+        {
+            UseEvents(template.Events, $"шаблон '{template.Name}'");
+            UseElements(template.Elements, $"шаблон '{template.Name}'");
+        }
+
+        if (used.Count == 0)
+            return;
+
+        if (config.Users.Roles.Count == 0)
+        {
+            diagnostics.Add(new BuildDiagnostic(BuildSeverity.Warning, "rights",
+                $"На схемах заданы права ({string.Join(", ", used.Keys)}), но в проекте " +
+                "нет ни одной роли (roles.json): ни один пользователь их не получит"));
+            return;
+        }
+
+        // системные права выданы по определению: их проверяет ядро, а не роли
+        var granted = new HashSet<string>(SystemPermissions.All, StringComparer.Ordinal);
+        foreach (var role in config.Users.Roles)
+            foreach (string permission in role.Permissions)
+                granted.Add(permission);
+
+        foreach (var (right, places) in used)
+            if (!granted.Contains(right))
+                diagnostics.Add(new BuildDiagnostic(BuildSeverity.Warning, "rights",
+                    $"Право '{right}' ({string.Join(", ", places)}) не выдано ни одной " +
+                    "роли проекта — опечатка?"));
     }
 
     /// <summary>Имя схемы/шаблона — имя секции пакета: недопустимые символы

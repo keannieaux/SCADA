@@ -24,6 +24,11 @@ public class SchemeFile
     /// <summary>События уровня экрана (Opened/Closed — §5.1).</summary>
     public List<SchemeEventDto> Events { get; set; } = [];
 
+    /// <summary>Право на открытие экрана (docs/users-plan.md §5). Только для
+    /// schemes/*.scheme; в шаблоне — ошибка загрузки: попап открывается
+    /// действием, право ставится на действие.</summary>
+    public string? RequiredRight { get; set; }
+
     /// <summary>Только для templates/*.scheme; в схеме — ошибка загрузки.</summary>
     public List<TemplateParameterDto> Parameters { get; set; } = [];
     public List<SchemeElementDto> Elements { get; set; } = [];
@@ -58,6 +63,13 @@ public class SchemeElementDto
     public List<ElementPropertyDto> Properties { get; set; } = [];
     public List<ElementBindingDto> Bindings { get; set; } = [];
     public List<SchemeEventDto> Events { get; set; } = [];
+
+    /// <summary>Право на элемент (docs/users-plan.md §5); без него элемент
+    /// недоступен в состоянии <see cref="DeniedState"/>.</summary>
+    public string? RequiredRight { get; set; }
+
+    /// <summary>Вид отказа: Disabled (умолчание) или Hidden.</summary>
+    public DeniedState DeniedState { get; set; } = DeniedState.Disabled;
 }
 
 // { "id": 10, "value": "#FF33383D" } — значение строкой, тип из дескриптора.
@@ -105,6 +117,13 @@ public abstract class SchemeActionDto
 
     /// <summary>Модификатор Confirm: текст вопроса перед выполнением.</summary>
     public string? Confirm { get; set; }
+
+    /// <summary>Право на выполнение действия (docs/users-plan.md §5).
+    /// Проверяется вместе с правом элемента: оба.</summary>
+    public string? RequiredRight { get; set; }
+
+    /// <summary>Что показать при отказе: Notify (умолчание) или Silent.</summary>
+    public DeniedFeedback DeniedFeedback { get; set; } = DeniedFeedback.Notify;
 }
 
 public sealed class WriteTagActionDto : SchemeActionDto

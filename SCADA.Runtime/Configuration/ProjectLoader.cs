@@ -20,6 +20,11 @@ public static class ProjectLoader
         // alarms.json опционален (docs/M5-plan.md §2.2): нет файла — нет аварий
         var alarmsFile  = LoadFile(projectDirectory, "alarms.json",
             ProjectJsonContext.Default.AlarmsFile, errors, optional: true);
+        // roles.json опционален (docs/users-plan.md §6): нет файла — проект
+        // без разграничения, рантайм в AuthMode.Local. users.json сюда НЕ
+        // читается: пользователи — данные эксплуатации, не исходники (§3)
+        var rolesFile   = LoadFile(projectDirectory, "roles.json",
+            ProjectJsonContext.Default.RolesFile, errors, optional: true);
 
         // если файлы не прочитались — дальше проверять нечего
         if (projectFile is null || devicesFile is null || tagsFile is null || errors.Count > 0)
@@ -30,6 +35,8 @@ public static class ProjectLoader
         CheckFormatVersion(tagsFile.FormatVersion, "tags.json", errors);
         if (alarmsFile is not null)
             CheckFormatVersion(alarmsFile.FormatVersion, "alarms.json", errors);
+        if (rolesFile is not null)
+            CheckFormatVersion(rolesFile.FormatVersion, "roles.json", errors);
 
         // схемы и шаблоны из schemes/ templates/ (концепт §3, §7) —
         // каталоги опциональны; ошибки исходников — в общий список
@@ -53,7 +60,16 @@ public static class ProjectLoader
                     Defaults = alarmsFile.Defaults
                 },
             Schemes = schemes,
-            Templates = templates
+            Templates = templates,
+            Users = rolesFile is null
+                ? new SCADA.Core.Users.UsersConfiguration()
+                : new SCADA.Core.Users.UsersConfiguration
+                {
+                    IsConfigured = true,
+                    Roles = rolesFile.Roles,
+                    MinPasswordLength = rolesFile.MinPasswordLength,
+                    IdleTimeoutMinutes = rolesFile.IdleTimeoutMinutes
+                }
         };
 
         // правила целостности живут в ProjectValidator — те же, что использует редактор

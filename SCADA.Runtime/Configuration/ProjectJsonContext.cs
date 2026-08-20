@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using SCADA.Core.Alarms;
 using SCADA.Core.Schemes;
 using SCADA.Core.Tags;
+using SCADA.Core.Users;
 
 namespace SCADA.Runtime.Configuration;
 
@@ -19,15 +20,19 @@ namespace SCADA.Runtime.Configuration;
                  typeof(JsonStringEnumConverter<ElementKind>),
                  typeof(JsonStringEnumConverter<StopMapping>),
                  typeof(JsonStringEnumConverter<SchemeEventKind>),
-                 typeof(JsonStringEnumConverter<TemplateParameterType>)])]
+                 typeof(JsonStringEnumConverter<TemplateParameterType>),
+                 typeof(JsonStringEnumConverter<DeniedState>),
+                 typeof(JsonStringEnumConverter<DeniedFeedback>)])]
 
 [JsonSerializable(typeof(TagDefinition))]
 [JsonSerializable(typeof(ProjectFile))]
 [JsonSerializable(typeof(DevicesFile))]
 [JsonSerializable(typeof(TagsFile))]
 [JsonSerializable(typeof(AlarmsFile))]
+[JsonSerializable(typeof(RolesFile))]
 [JsonSerializable(typeof(SchemeFile))]
 [JsonSerializable(typeof(Dictionary<string, double>))]
+[JsonSerializable(typeof(List<UserDefinition>))]
 public partial class ProjectJsonContext: JsonSerializerContext
 {
 

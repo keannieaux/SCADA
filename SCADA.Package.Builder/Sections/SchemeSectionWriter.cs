@@ -22,6 +22,10 @@ namespace SCADA.Package.Builder.Sections;
 /// Текст выражений привязок и условий в секцию НЕ пишется — только индексы
 /// в общем пуле code.bin (CompiledExpressionIndex, CompiledTagIndices §4.1);
 /// -1 = отсутствует. Словари: int count (-1 = null) + пары (string, string).
+///
+/// Права (docs/users-plan.md §5) — часть раскладки: в заголовке право схемы,
+/// в хвосте блока элемента право и DeniedState, в хвосте блока действия
+/// право и DeniedFeedback.
 /// До релиза версия = 1, совместимость не поддерживается: поменял раскладку —
 /// пересобери пакет.
 /// </summary>
@@ -34,7 +38,8 @@ public static class SchemeSectionWriter
         using var stream = new MemoryStream();
         using var writer = new BinaryWriter(stream, Encoding.UTF8);
 
-        WriteHeader(writer, scheme.Id, scheme.Name, scheme.Properties, scheme.Events);
+        WriteHeader(writer, scheme.Id, scheme.Name, scheme.RequiredRight,
+            scheme.Properties, scheme.Events);
         WriteElements(writer, scheme.Elements);
 
         writer.Flush();
@@ -46,7 +51,10 @@ public static class SchemeSectionWriter
         using var stream = new MemoryStream();
         using var writer = new BinaryWriter(stream, Encoding.UTF8);
 
-        WriteHeader(writer, template.Id, template.Name, template.Properties, template.Events);
+        // у шаблона права нет (§5): попап открывается действием, право — на нём.
+        // Поле в заголовке общее с схемой, пишется как отсутствующее
+        WriteHeader(writer, template.Id, template.Name, requiredRight: null,
+            template.Properties, template.Events);
 
         writer.Write(template.Parameters.Count);
         foreach (var parameter in template.Parameters)
@@ -63,11 +71,13 @@ public static class SchemeSectionWriter
     }
 
     private static void WriteHeader(BinaryWriter writer, Guid id, string name,
+        string? requiredRight,
         IReadOnlyList<ElementProperty> properties, IReadOnlyList<SchemeEvent> events)
     {
         writer.Write(Version);
         writer.Write(id.ToByteArray());
         writer.Write(name);
+        WriteNullableString(writer, requiredRight); // право схемы (§5)
         WriteProperties(writer, properties);
         WriteEvents(writer, events);
     }
@@ -131,6 +141,10 @@ public static class SchemeSectionWriter
                 WriteBinding(block, binding);
 
             WriteEvents(block, element.Events);
+
+            // право элемента и вид отказа (§5)
+            WriteNullableString(block, element.RequiredRight);
+            block.Write((byte)element.DeniedState);
 
             block.Flush();
         }
@@ -233,6 +247,10 @@ public static class SchemeSectionWriter
             block.Write(action.CompiledConditionIndex ?? -1);
             WriteTagIndices(block, action.CompiledConditionTagIndices);
             WriteNullableString(block, action.Confirmation);
+
+            // право действия и вид отказа (§5)
+            WriteNullableString(block, action.RequiredRight);
+            block.Write((byte)action.DeniedFeedback);
 
             block.Flush();
         }

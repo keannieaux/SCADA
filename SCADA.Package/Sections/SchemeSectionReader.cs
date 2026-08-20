@@ -26,11 +26,12 @@ public static class SchemeSectionReader
         using var stream = new MemoryStream(section);
         using var reader = new BinaryReader(stream, Encoding.UTF8);
 
-        var (id, name, properties, events) = ReadHeader(reader);
+        var (id, name, requiredRight, properties, events) = ReadHeader(reader);
         return new Scheme
         {
             Id = id,
             Name = name,
+            RequiredRight = requiredRight,
             Properties = properties,
             Events = events,
             Elements = ReadElements(reader)
@@ -42,7 +43,8 @@ public static class SchemeSectionReader
         using var stream = new MemoryStream(section);
         using var reader = new BinaryReader(stream, Encoding.UTF8);
 
-        var (id, name, properties, events) = ReadHeader(reader);
+        // право заголовка у шаблона всегда отсутствует (§5) — читается и не используется
+        var (id, name, _, properties, events) = ReadHeader(reader);
 
         int parameterCount = reader.ReadInt32();
         var parameters = new List<TemplateParameter>(parameterCount);
@@ -65,8 +67,9 @@ public static class SchemeSectionReader
         };
     }
 
-    private static (Guid Id, string Name, List<ElementProperty> Properties,
-        List<SchemeEvent> Events) ReadHeader(BinaryReader reader)
+    private static (Guid Id, string Name, string? RequiredRight,
+        List<ElementProperty> Properties, List<SchemeEvent> Events) ReadHeader(
+            BinaryReader reader)
     {
         byte version = reader.ReadByte();
         if (version > MaxSupportedVersion)
@@ -76,7 +79,8 @@ public static class SchemeSectionReader
 
         var id = new Guid(reader.ReadBytes(16));
         string name = reader.ReadString();
-        return (id, name, ReadSchemeProperties(reader), ReadEvents(reader));
+        string? requiredRight = ReadNullableString(reader); // право схемы (§5)
+        return (id, name, requiredRight, ReadSchemeProperties(reader), ReadEvents(reader));
     }
 
     private static List<ElementProperty> ReadSchemeProperties(BinaryReader reader)
@@ -121,23 +125,44 @@ public static class SchemeSectionReader
             return null;
         }
 
+        var id = new Guid(reader.ReadBytes(16));
+        string name = reader.ReadString();
+        double x = reader.ReadDouble();
+        double y = reader.ReadDouble();
+        double width = reader.ReadDouble();
+        double height = reader.ReadDouble();
+        int zOrder = reader.ReadInt32();
+        Guid? parentId = reader.ReadBoolean() ? new Guid(reader.ReadBytes(16)) : null;
+        string? controlType = ReadNullableString(reader);
+        string? templateName = ReadNullableString(reader);
+        var templateParameters = ReadStringPairs(reader);
+        var properties = ReadProperties(reader, kind);
+        var bindings = ReadBindings(reader);
+        var events = ReadEvents(reader);
+
+        // право элемента и вид отказа (§5)
+        string? requiredRight = ReadNullableString(reader);
+        var deniedState = (DeniedState)reader.ReadByte();
+
         var element = new SchemeElement
         {
             Kind = kind,
-            Id = new Guid(reader.ReadBytes(16)),
-            Name = reader.ReadString(),
-            X = reader.ReadDouble(),
-            Y = reader.ReadDouble(),
-            Width = reader.ReadDouble(),
-            Height = reader.ReadDouble(),
-            ZOrder = reader.ReadInt32(),
-            ParentId = reader.ReadBoolean() ? new Guid(reader.ReadBytes(16)) : null,
-            ControlType = ReadNullableString(reader),
-            TemplateName = ReadNullableString(reader),
-            TemplateParameters = ReadStringPairs(reader),
-            Properties = ReadProperties(reader, kind),
-            Bindings = ReadBindings(reader),
-            Events = ReadEvents(reader)
+            Id = id,
+            Name = name,
+            X = x,
+            Y = y,
+            Width = width,
+            Height = height,
+            ZOrder = zOrder,
+            ParentId = parentId,
+            ControlType = controlType,
+            TemplateName = templateName,
+            TemplateParameters = templateParameters,
+            Properties = properties,
+            Bindings = bindings,
+            Events = events,
+            RequiredRight = requiredRight,
+            DeniedState = deniedState
         };
 
         // хвост блока (поля более новой версии) пропускаем
@@ -269,6 +294,13 @@ public static class SchemeSectionReader
         string? confirmation = ReadNullableString(reader);
         if (confirmation is not null)
             action = action with { Confirmation = confirmation };
+
+        // право действия и вид отказа (§5)
+        action = action with
+        {
+            RequiredRight = ReadNullableString(reader),
+            DeniedFeedback = (DeniedFeedback)reader.ReadByte()
+        };
 
         // хвост блока действия пропускаем
         reader.BaseStream.Position = actionEnd;

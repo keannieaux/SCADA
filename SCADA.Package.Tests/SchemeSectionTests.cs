@@ -406,6 +406,7 @@ public class SchemeSectionTests
         writer.Write(version);
         writer.Write(SchemeId.ToByteArray());
         writer.Write("test");
+        writer.Write(false); // право схемы отсутствует (§5)
         if (schemeProperties is null) writer.Write(0); else schemeProperties(writer);
         if (schemeEvents is null) writer.Write(0); else schemeEvents(writer);
         writer.Write(elementBlocks.Length);
@@ -439,6 +440,9 @@ public class SchemeSectionTests
         if (properties is null) writer.Write(0); else properties(writer);
         if (bindings is null) writer.Write(0); else bindings(writer);
         if (events is null) writer.Write(0); else events(writer);
+        writer.Write(false);                    // нет права (§5)
+        writer.Write((byte)DeniedState.Disabled);
+        // «поля из будущего» дописываются после известных полей блока
         tail?.Invoke(writer);
         writer.Flush();
         return stream.ToArray();

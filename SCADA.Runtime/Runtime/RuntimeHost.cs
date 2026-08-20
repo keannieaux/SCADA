@@ -3,6 +3,7 @@ using Microsoft.Extensions.Hosting;
 using SCADA.Alarms;
 using SCADA.Core.Alarms;
 using SCADA.Core.Tags;
+using SCADA.Core.Users;
 using SCADA.Historian;
 using SCADA.Package;
 using SCADA.Package.Sections;
@@ -13,6 +14,7 @@ using SCADA.Runtime.Hosting;
 using SCADA.Runtime.Polling;
 using SCADA.Runtime.Schemes;
 using SCADA.Runtime.TagTable;
+using SCADA.Runtime.Users;
 
 namespace SCADA.Runtime.Runtime;
 
@@ -175,6 +177,26 @@ public sealed class RuntimeHost : IAsyncDisposable
         builder.Services.AddSingleton(engine);
         builder.Services.AddHostedService<RuntimeHostService>();
 
+        // --- пользователи и сессии (docs/users-plan.md §6) ---
+
+        // users.json — данные эксплуатации, лежат рядом с журналом и архивом,
+        // в пакет не входят (§3). Роли и политики приезжают из пакета.
+        var userStore = new UserStore(projectDirectory, config.Users);
+        if (userStore.EnsureAdmin())
+            Console.WriteLine(
+                $"[пользователи] не осталось ни одного пользователя с правом " +
+                $"{SystemPermissions.ManageUsers}: создана учётка восстановления " +
+                $"'{UserStore.DefaultAdminLogin}' с паролем по умолчанию — смените его");
+
+        var sessions = new SessionService(userStore, config.Users, options.AuthMode);
+        // проверки прав в ядре (§5): в режиме Local встроенный администратор
+        // разрешает всё — поведение существующих запусков не меняется
+        var accessControl = new SessionAccessControl(sessions);
+        builder.Services.AddSingleton<IUserStore>(userStore);
+        builder.Services.AddSingleton<ISessionService>(sessions);
+        builder.Services.AddSingleton<IAccessControl>(accessControl);
+        builder.Services.AddHostedService<SessionHostService>();
+
         // --- сигнализация (M5, docs/M5-plan.md) ---
 
         var journalOptions = options.Journal;
@@ -323,7 +345,8 @@ public sealed class RuntimeHost : IAsyncDisposable
 
             builder.Services.AddSingleton<IRuntimeClient>(sp =>
                 new LocalRuntimeClient(tagTable, sp.GetRequiredService<IHistorian>(), queryLimits,
-                    alarmEngine, eventJournal, alarmBroadcaster, engine, schemeCatalog));
+                    alarmEngine, eventJournal, alarmBroadcaster, engine, schemeCatalog,
+                    accessControl, auditJournal));
 
             Console.WriteLine($"[архив] каталог: {archiveRoot}");
         }
@@ -333,7 +356,7 @@ public sealed class RuntimeHost : IAsyncDisposable
             // диагностика работают, тренды показывают пустоту вместо падения.
             builder.Services.AddSingleton<IRuntimeClient>(new LocalRuntimeClient(
                 tagTable, null, queryLimits, alarmEngine, eventJournal, alarmBroadcaster,
-                engine, schemeCatalog));
+                engine, schemeCatalog, accessControl, auditJournal));
             Console.WriteLine("[архив] выключен настройкой Runtime:Archive:Enabled");
         }
 

@@ -11,7 +11,9 @@ namespace SCADA.Core.Users;
 /// </summary>
 public class UserDefinition
 {
-    /// <summary>Уникальный логин. Сравнение — Ordinal (логины регистрозависимы).</summary>
+    /// <summary>Уникальный логин. Сравнивается без учёта регистра
+    /// (UserStore.LoginComparison); регистр ввода сохраняется для
+    /// отображения и аудита.</summary>
     public required string Login { get; set; }
 
     /// <summary>Алгоритм хеширования. Сейчас только PasswordHasher.Pbkdf2Sha256;

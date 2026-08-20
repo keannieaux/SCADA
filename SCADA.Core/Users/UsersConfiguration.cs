@@ -9,6 +9,12 @@ namespace SCADA.Core.Users;
 /// </summary>
 public class UsersConfiguration
 {
+    /// <summary>Задана ли подсистема в проекте: есть roles.json (секция
+    /// roles.bin в пакете). Отличает «разграничения нет вовсе» от «роли ещё
+    /// не заведены, но политики настроены» — иначе политики не доехали бы
+    /// до пакета.</summary>
+    public bool IsConfigured { get; set; }
+
     /// <summary>Роли проекта: именованные наборы прав.</summary>
     public IReadOnlyList<RoleDefinition> Roles { get; set; } = [];
 
@@ -16,7 +22,11 @@ public class UsersConfiguration
     /// в UserStore при записи, не здесь).</summary>
     public int MinPasswordLength { get; set; } = 4;
 
-    /// <summary>Таймаут автоблокировки сессии по бездействию, минуты
-    /// (ТЗ §13). 0 = автоблокировка отключена.</summary>
-    public int SessionTimeoutMinutes { get; set; } = 10;
+    /// <summary>Автоблокировка по бездействию, минуты (ТЗ §13): нет действий
+    /// оператора столько времени — сессия блокируется. 0 = выключено.
+    /// Именно «по бездействию», а не «время жизни сессии»: другие поводы
+    /// завершить сессию (лимит длительности, пересменка по расписанию)
+    /// станут отдельными политиками рядом, а не переопределением этой
+    /// (docs/users-plan.md §6).</summary>
+    public int IdleTimeoutMinutes { get; set; } = 10;
 }

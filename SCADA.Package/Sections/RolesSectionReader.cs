@@ -34,9 +34,10 @@ public static class RolesSectionReader
 
         return new UsersConfiguration
         {
+            IsConfigured = true, // секция есть — значит в проекте был roles.json
             Roles = roles,
             MinPasswordLength = reader.ReadInt32(),
-            SessionTimeoutMinutes = reader.ReadInt32()
+            IdleTimeoutMinutes = reader.ReadInt32()
         };
     }
 }

@@ -24,6 +24,11 @@ public sealed class UserStore : IUserStore
     /// первым действием администратора.</summary>
     public const string DefaultAdminPassword = "admin";
 
+    /// <summary>Логины сравниваются без учёта регистра: оператор за пультом
+    /// набирает логин как придётся, «Иванов» и «иванов» — один человек.
+    /// Регистр ввода сохраняется как есть (для отображения и аудита).</summary>
+    public const StringComparison LoginComparison = StringComparison.OrdinalIgnoreCase;
+
     private readonly string _filePath;
     private readonly UsersConfiguration _configuration;
     private readonly object _gate = new();
@@ -45,12 +50,12 @@ public sealed class UserStore : IUserStore
 
     public IReadOnlyList<UserDefinition> Users
     {
-        get { lock (_gate) return _users.ToArray(); }
+        get { lock (_gate) return _users.Select(Copy).ToArray(); }
     }
 
     public UserDefinition? Find(string login)
     {
-        lock (_gate) return FindCore(login);
+        lock (_gate) return FindCore(login) is { } user ? Copy(user) : null;
     }
 
     public bool VerifyPassword(string login, string password)
@@ -62,8 +67,13 @@ public sealed class UserStore : IUserStore
                 return false;
 
             // upgrade-on-login: хеш на старых параметрах — переписать актуальными
-            if (user.Iterations < PasswordHasher.DefaultIterations)
+            // и сохранить, иначе пересчёт повторялся бы на каждом входе,
+            // а в файле параметры оставались бы старыми
+            if (PasswordHasher.NeedsUpgrade(user))
+            {
                 SetPasswordCore(user, password);
+                Save();
+            }
             return true;
         }
     }
@@ -141,17 +151,17 @@ public sealed class UserStore : IUserStore
         }
     }
 
-    public void EnsureAdmin()
+    public bool EnsureAdmin()
     {
         lock (_gate)
         {
             // проект без ролей — локальный режим, учётка восстановления не нужна
             if (_configuration.Roles.Count == 0)
-                return;
+                return false;
             if (_users.Any(u => GrantsManageUsers(u.Roles)))
-                return;
+                return false;
             if (FindCore(DefaultAdminLogin) is not null)
-                return; // логин занят, но админов всё равно нет — странно, не затираем чужого
+                return false; // логин занят, но админов всё равно нет — странно, не затираем чужого
 
             // admin получает все роли проекта: носитель ManageUsers гарантирован,
             // если хоть одна роль его даёт (состав ролей — зона инженера)
@@ -164,13 +174,27 @@ public sealed class UserStore : IUserStore
                 Roles = _configuration.Roles.Select(r => r.Name).ToList()
             });
             Save();
+            return true;
         }
     }
 
     // --- внутреннее (под _gate) ---
 
+    /// <summary>Наружу отдаётся копия: правка записи мимо хранилища прошла бы
+    /// без Save и мимо защиты последнего носителя ManageUsers. Сессия хранит
+    /// логин и снимок прав, а не ссылку на запись (users-plan.md §6).</summary>
+    private static UserDefinition Copy(UserDefinition user) => new()
+    {
+        Login = user.Login,
+        Algorithm = user.Algorithm,
+        Iterations = user.Iterations,
+        Salt = user.Salt,
+        PasswordHash = user.PasswordHash,
+        Roles = [..user.Roles]
+    };
+
     private UserDefinition? FindCore(string login)
-        => _users.FirstOrDefault(u => string.Equals(u.Login, login, StringComparison.Ordinal));
+        => _users.FirstOrDefault(u => string.Equals(u.Login, login, LoginComparison));
 
     private bool GrantsManageUsers(IEnumerable<string> roleNames)
         => roleNames.Any(name =>
@@ -204,9 +228,11 @@ public sealed class UserStore : IUserStore
     {
         if (!File.Exists(_filePath))
             return [];
+
+        List<UserDefinition> users;
         try
         {
-            return JsonSerializer.Deserialize(
+            users = JsonSerializer.Deserialize(
                 File.ReadAllText(_filePath),
                 ProjectJsonContext.Default.ListUserDefinition) ?? [];
         }
@@ -216,15 +242,38 @@ public sealed class UserStore : IUserStore
                 $"users.json повреждён и не прочитан: {ex.Message}. " +
                 "Восстановите файл из бэкапа или удалите его для ресида admin (users-plan.md §4.4)", ex);
         }
+
+        // файл правится и руками: дубль логина сделал бы «второго ивановa»
+        // невидимым — вход и смена пароля молча доставались бы первому
+        var duplicate = users
+            .GroupBy(u => u.Login, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault(g => g.Count() > 1);
+        if (duplicate is not null)
+            throw new UserStoreException(
+                $"users.json: логин '{duplicate.Key}' встречается больше одного раза " +
+                "(логины сравниваются без учёта регистра)");
+
+        return users;
     }
 
-    /// <summary>Атомарная запись: .tmp + Move поверх (users-plan.md §4.2).</summary>
+    /// <summary>Атомарная запись: .tmp + Move поверх (users-plan.md §4.2).
+    /// Данные временного файла сбрасываются на диск до Move — иначе сбой
+    /// питания мог бы закрепить поверх users.json пустой хвост.</summary>
     private void Save()
     {
         string json = JsonSerializer.Serialize(_users,
             ProjectJsonContext.Default.ListUserDefinition);
         string tempPath = _filePath + ".tmp";
-        File.WriteAllText(tempPath, json);
+
+        using (var stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write,
+                   FileShare.None))
+        using (var text = new StreamWriter(stream))
+        {
+            text.Write(json);
+            text.Flush();
+            stream.Flush(flushToDisk: true);
+        }
+
         File.Move(tempPath, _filePath, overwrite: true);
     }
 }

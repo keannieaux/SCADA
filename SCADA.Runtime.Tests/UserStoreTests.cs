@@ -64,8 +64,30 @@ public class UserStoreTests : IDisposable
         Assert.Equal(["Оператор"], user.Roles);
         Assert.True(reloaded.VerifyPassword("ivanov", "password1"));
         Assert.False(reloaded.VerifyPassword("ivanov", "password2"));
-        // регистр логина значим
-        Assert.Null(reloaded.Find("Ivanov"));
+    }
+
+    [Fact]
+    public void Login_IsCaseInsensitive()
+    {
+        var store = new UserStore(_dir, ConfigWithRoles);
+        store.AddUser("Ivanov", "password1", ["Оператор"]);
+
+        Assert.NotNull(store.Find("ivanov"));
+        Assert.Equal("Ivanov", store.Find("IVANOV")!.Login); // регистр ввода сохранён
+        Assert.True(store.VerifyPassword("iVaNoV", "password1"));
+        Assert.Throws<UserStoreException>(() =>
+            store.AddUser("ivanov", "password2", ["Оператор"]));
+    }
+
+    [Fact]
+    public void Find_ReturnsCopy_MutationDoesNotLeakIntoStore()
+    {
+        var store = new UserStore(_dir, ConfigWithRoles);
+        store.AddUser("ivanov", "password1", ["Оператор"]);
+
+        store.Find("ivanov")!.Roles.Add("Администратор");
+
+        Assert.Equal(["Оператор"], store.Find("ivanov")!.Roles);
     }
 
     [Fact]
@@ -165,6 +187,24 @@ public class UserStoreTests : IDisposable
 
         var upgraded = store.Find("ivanov")!;
         Assert.Equal(PasswordHasher.DefaultIterations, upgraded.Iterations);
+
+        // апгрейд обязан лечь в файл: иначе пересчёт повторялся бы на каждом
+        // входе, а на диске оставались бы старые параметры
+        var reloaded = new UserStore(_dir, ConfigWithRoles);
+        Assert.Equal(PasswordHasher.DefaultIterations, reloaded.Find("ivanov")!.Iterations);
+        Assert.True(reloaded.VerifyPassword("ivanov", "password1"));
+    }
+
+    [Fact]
+    public void DuplicateLoginInFile_Throws()
+    {
+        File.WriteAllText(FilePath,
+            $"[{MakeUserJson("ivanov", "password1", 1000, "[\"Оператор\"]")}," +
+            $"{MakeUserJson("Ivanov", "password2", 1000, "[\"Администратор\"]")}]");
+
+        var ex = Assert.Throws<UserStoreException>(() =>
+            new UserStore(_dir, ConfigWithRoles));
+        Assert.Contains("больше одного раза", ex.Message);
     }
 
     [Fact]

@@ -11,10 +11,11 @@ namespace SCADA.Runtime.Users;
 /// </summary>
 public interface IUserStore
 {
-    /// <summary>Снимок списка пользователей.</summary>
+    /// <summary>Снимок списка пользователей (копии записей).</summary>
     IReadOnlyList<UserDefinition> Users { get; }
 
-    /// <summary>Поиск по логину (Ordinal — логины регистрозависимы).</summary>
+    /// <summary>Поиск по логину без учёта регистра. Возвращается копия:
+    /// изменения проходят только через методы хранилища.</summary>
     UserDefinition? Find(string login);
 
     /// <summary>Проверка пароля. При успехе и устаревших параметрах хеша
@@ -40,6 +41,8 @@ public interface IUserStore
     /// <summary>Гарантирует существование хотя бы одного носителя ManageUsers:
     /// если ни одного нет (удалили последнего админа, потерян файл) — создаёт
     /// дефолтного admin. Вызывается рантаймом при старте и утилитой.
-    /// В проекте без ролей (AuthMode.Local) — no-op.</summary>
-    void EnsureAdmin();
+    /// В проекте без ролей (AuthMode.Local) — no-op.
+    /// Возвращает true, если учётка была создана: рантайм обязан сказать об
+    /// этом в журнал — на объекте появился вход с паролем по умолчанию (§4.4).</summary>
+    bool EnsureAdmin();
 }

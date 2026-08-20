@@ -56,8 +56,8 @@ public static class ProjectValidator
 
         if (config.Users.MinPasswordLength < 0)
             errors.Add("roles.json: minPasswordLength не может быть отрицательным");
-        if (config.Users.SessionTimeoutMinutes < 0)
-            errors.Add("roles.json: sessionTimeoutMinutes не может быть отрицательным (0 — автоблокировка отключена)");
+        if (config.Users.IdleTimeoutMinutes < 0)
+            errors.Add("roles.json: idleTimeoutMinutes не может быть отрицательным (0 — автоблокировка отключена)");
     }
 
     // строковые теги (концепт §4.6, A7): v1 — только внутренние. Архив

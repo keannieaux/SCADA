@@ -47,7 +47,7 @@ public class RolesLoaderTests : IDisposable
             {
               "formatVersion": 1,
               "minPasswordLength": 6,
-              "sessionTimeoutMinutes": 15,
+              "idleTimeoutMinutes": 15,
               "roles": [
                 { "name": "Наблюдатель", "permissions": ["View"] },
                 { "name": "Оператор", "permissions": ["View", "Operate", "AckAlarms"] },
@@ -66,6 +66,7 @@ public class RolesLoaderTests : IDisposable
 
         Assert.Empty(config.Users.Roles);
         Assert.True(config.Users.MinPasswordLength > 0);
+        Assert.False(config.Users.IsConfigured); // нет roles.json — нет и секции в пакете
     }
 
     [Fact]
@@ -78,7 +79,8 @@ public class RolesLoaderTests : IDisposable
 
         Assert.Equal(3, config.Users.Roles.Count);
         Assert.Equal(6, config.Users.MinPasswordLength);
-        Assert.Equal(15, config.Users.SessionTimeoutMinutes);
+        Assert.Equal(15, config.Users.IdleTimeoutMinutes);
+        Assert.True(config.Users.IsConfigured);
 
         var technologist = config.Users.Roles.Single(r => r.Name == "Технолог");
         // проектное право — произвольная строка, валидатор её пропускает
@@ -135,19 +137,19 @@ public class RolesLoaderTests : IDisposable
     }
 
     [Fact]
-    public void NegativeSessionTimeout_Fails()
+    public void NegativeIdleTimeout_Fails()
     {
         WriteValidProject();
         WriteFile("roles.json", """
             {
               "formatVersion": 1,
-              "sessionTimeoutMinutes": -5,
+              "idleTimeoutMinutes": -5,
               "roles": [{ "name": "Оператор", "permissions": ["View"] }]
             }
             """);
 
         var ex = Assert.Throws<ProjectConfigurationException>(() => ProjectLoader.Load(_dir));
-        Assert.Contains(ex.Errors, e => e.Contains("sessionTimeoutMinutes"));
+        Assert.Contains(ex.Errors, e => e.Contains("idleTimeoutMinutes"));
     }
 
     [Fact]

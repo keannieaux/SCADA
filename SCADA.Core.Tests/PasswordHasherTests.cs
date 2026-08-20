@@ -21,6 +21,18 @@ public class PasswordHasherTests
     }
 
     [Fact]
+    public void NeedsUpgrade_OldParameters_True_CurrentOnes_False()
+    {
+        Assert.True(PasswordHasher.NeedsUpgrade(MakeUser("secret", iterations: 1000)));
+
+        var current = MakeUser("secret", PasswordHasher.DefaultIterations);
+        Assert.False(PasswordHasher.NeedsUpgrade(current));
+
+        current.Algorithm = "scrypt-когда-нибудь";
+        Assert.True(PasswordHasher.NeedsUpgrade(current));
+    }
+
+    [Fact]
     public void Verify_CorrectPassword_ReturnsTrue()
     {
         var user = MakeUser("secret");

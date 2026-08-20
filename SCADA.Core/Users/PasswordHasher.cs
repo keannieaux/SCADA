@@ -59,6 +59,14 @@ public static class PasswordHasher
         return CryptographicOperations.FixedTimeEquals(actual, expected);
     }
 
+    /// <summary>Посчитан ли хеш пользователя устаревшими параметрами —
+    /// другим алгоритмом или меньшим числом итераций. Знание о том, что
+    /// считать устаревшим, живёт здесь же, где алгоритмы: добавляя новый,
+    /// правишь одно место, а не условие в хранилище.</summary>
+    public static bool NeedsUpgrade(UserDefinition user)
+        => !string.Equals(user.Algorithm, Pbkdf2Sha256, StringComparison.Ordinal)
+           || user.Iterations < DefaultIterations;
+
     private static byte[] HashCore(string password, byte[] salt, int iterations)
         => Rfc2898DeriveBytes.Pbkdf2(
             password, salt, iterations, HashAlgorithmName.SHA256, HashSize);

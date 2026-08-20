@@ -65,9 +65,10 @@ public static class ProjectLoader
                 ? new SCADA.Core.Users.UsersConfiguration()
                 : new SCADA.Core.Users.UsersConfiguration
                 {
+                    IsConfigured = true,
                     Roles = rolesFile.Roles,
                     MinPasswordLength = rolesFile.MinPasswordLength,
-                    SessionTimeoutMinutes = rolesFile.SessionTimeoutMinutes
+                    IdleTimeoutMinutes = rolesFile.IdleTimeoutMinutes
                 }
         };
 

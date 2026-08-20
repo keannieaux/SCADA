@@ -35,8 +35,11 @@ public static class RolesSectionWriter
             writer.Write(recordStream.GetBuffer(), 0, (int)recordStream.Length);
         }
 
+        // политики — хвостом секции: новая политика (лимит длительности,
+        // пересменка) дописывается сюда же, читатель старых пакетов
+        // до неё просто не доходит
         writer.Write(config.MinPasswordLength);
-        writer.Write(config.SessionTimeoutMinutes);
+        writer.Write(config.IdleTimeoutMinutes);
 
         writer.Flush();
         return stream.ToArray();

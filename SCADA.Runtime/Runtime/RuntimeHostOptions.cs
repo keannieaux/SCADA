@@ -1,4 +1,5 @@
 using SCADA.Alarms;
+using SCADA.Core.Users;
 using SCADA.Runtime.Alarms;
 using SCADA.Runtime.Historian;
 
@@ -29,4 +30,9 @@ public sealed record RuntimeHostOptions
 
     /// <summary>Пределы запросов истории (§14.1).</summary>
     public HistoryQueryLimits HistoryLimits { get; init; } = new();
+
+    /// <summary>Режим аутентификации (docs/users-plan.md §6). Умолчание
+    /// Local — автологин: запуск проекта без ролей и разработка экранов
+    /// не должны упираться в окно входа.</summary>
+    public AuthMode AuthMode { get; init; } = AuthMode.Local;
 }

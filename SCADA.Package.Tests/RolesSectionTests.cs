@@ -45,7 +45,7 @@ public class RolesSectionTests : IDisposable
             {
               "formatVersion": 1,
               "minPasswordLength": 8,
-              "sessionTimeoutMinutes": 20,
+              "idleTimeoutMinutes": 20,
               "roles": [
                 { "name": "Оператор", "permissions": ["View", "Operate", "AckAlarms"] },
                 { "name": "Администратор", "permissions": ["View", "Operate", "AckAlarms", "ManageUsers", "UpdateProject"] }
@@ -65,7 +65,7 @@ public class RolesSectionTests : IDisposable
                 new RoleDefinition { Name = "Пустышка", Permissions = [] }
             ],
             MinPasswordLength = 8,
-            SessionTimeoutMinutes = 0 // автоблокировка отключена
+            IdleTimeoutMinutes = 0 // автоблокировка отключена
         };
 
         var read = RolesSectionReader.Read(RolesSectionWriter.Write(source));
@@ -75,7 +75,7 @@ public class RolesSectionTests : IDisposable
         Assert.Equal(["View", "Operate", "Насосная.Control"], read.Roles[0].Permissions);
         Assert.Empty(read.Roles[1].Permissions);
         Assert.Equal(8, read.MinPasswordLength);
-        Assert.Equal(0, read.SessionTimeoutMinutes);
+        Assert.Equal(0, read.IdleTimeoutMinutes);
     }
 
     [Fact]
@@ -90,10 +90,27 @@ public class RolesSectionTests : IDisposable
         var admin = config.Users.Roles.Single(r => r.Name == "Администратор");
         Assert.Contains(SystemPermissions.ManageUsers, admin.Permissions);
         Assert.Equal(8, config.Users.MinPasswordLength);
-        Assert.Equal(20, config.Users.SessionTimeoutMinutes);
+        Assert.Equal(20, config.Users.IdleTimeoutMinutes);
 
         using var reader = PackageReader.Open(PackagePath);
         Assert.True(reader.HasEntry("roles.bin"));
+    }
+
+    [Fact]
+    public void RolesJsonWithoutRoles_StillCarriesPolicies()
+    {
+        // роли ещё не заведены, но политики инженер уже настроил —
+        // они обязаны доехать до пакета
+        File.WriteAllText(Path.Combine(ProjectDir, "roles.json"), """
+            {"formatVersion": 1, "roles": [], "minPasswordLength": 12, "idleTimeoutMinutes": 3}
+            """);
+
+        PackageBuilder.Build(ProjectDir, PackagePath);
+        var config = PackageProjectLoader.Load(PackagePath);
+
+        Assert.Empty(config.Users.Roles);
+        Assert.Equal(12, config.Users.MinPasswordLength);
+        Assert.Equal(3, config.Users.IdleTimeoutMinutes);
     }
 
     [Fact]

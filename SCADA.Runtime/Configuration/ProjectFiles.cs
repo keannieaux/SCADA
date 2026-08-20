@@ -47,7 +47,7 @@ public class AlarmsFile
 }
 
 // roles.json: {"formatVersion": 1, "roles": [...], "minPasswordLength": 4,
-//              "sessionTimeoutMinutes": 10}
+//              "idleTimeoutMinutes": 10}
 // Файл опционален (docs/users-plan.md §6): отсутствие = проект без
 // разграничения, рантайм работает в AuthMode.Local. Пользователей в файле
 // нет — users.json живёт в папке проекта и загрузчиком не читается (§3).
@@ -56,5 +56,5 @@ public class RolesFile
     public int FormatVersion { get; set; }
     public IReadOnlyList<RoleDefinition> Roles { get; set; } = [];
     public int MinPasswordLength { get; set; } = 4;
-    public int SessionTimeoutMinutes { get; set; } = 10;
+    public int IdleTimeoutMinutes { get; set; } = 10;
 }

@@ -25,9 +25,39 @@ public static class ProjectValidator
         ValidateTagIds(config.Tags, errors);
         ValidateNoSystemEntities(config, errors);
         ValidateAlarms(config, errors);
+        ValidateRoles(config, errors);
         ValidateStartScheme(config, errors);
         ValidateStringTags(config, errors);
         return errors;
+    }
+
+    // роли и политики пользователей (docs/users-plan.md §2.2, §6). Права
+    // сверяются только по форме: проектные права — произвольные строки,
+    // «неизвестных» для валидатора не существует. Сверка прав ролей с
+    // RequiredRight схем — на этапе 6, когда RequiredRight появится в модели
+    private static void ValidateRoles(ProjectConfiguration config, List<string> errors)
+    {
+        foreach (var group in config.Users.Roles.GroupBy(r => r.Name).Where(g => g.Count() > 1))
+            errors.Add($"Дубликат имени роли '{group.Key}'");
+
+        foreach (var role in config.Users.Roles)
+        {
+            if (string.IsNullOrWhiteSpace(role.Name))
+            {
+                errors.Add("Роль с пустым именем");
+                continue;
+            }
+            foreach (string permission in role.Permissions)
+                if (string.IsNullOrWhiteSpace(permission))
+                    errors.Add($"Роль '{role.Name}': пустое право");
+            foreach (var dup in role.Permissions.GroupBy(p => p).Where(g => g.Count() > 1))
+                errors.Add($"Роль '{role.Name}': право '{dup.Key}' задано дважды");
+        }
+
+        if (config.Users.MinPasswordLength < 0)
+            errors.Add("roles.json: minPasswordLength не может быть отрицательным");
+        if (config.Users.SessionTimeoutMinutes < 0)
+            errors.Add("roles.json: sessionTimeoutMinutes не может быть отрицательным (0 — автоблокировка отключена)");
     }
 
     // строковые теги (концепт §4.6, A7): v1 — только внутренние. Архив

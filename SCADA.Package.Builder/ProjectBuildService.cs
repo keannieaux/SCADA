@@ -86,6 +86,12 @@ public static class ProjectBuildService
                         writer.AddEntry(entry, bytes);
                 }
 
+                // роли проекта (docs/users-plan.md §4.1): секция опциональна —
+                // проект без roles.json собирается без неё. Пользователей в
+                // пакете нет и не будет (§3)
+                if (config.Users.Roles.Count > 0)
+                    writer.AddEntry("roles.bin", RolesSectionWriter.Write(config.Users));
+
                 // схемы и шаблоны — секциями schemes/<имя>.bin / templates/<имя>.bin,
                 // перечисление на чтении — через манифест (§11.1)
                 foreach (var scheme in config.Schemes)

@@ -31,6 +31,10 @@ public static class PackageProjectLoader
             Alarms = reader.HasEntry("alarms.bin")
                 ? AlarmsSectionReader.Read(reader.ReadEntry("alarms.bin"))
                 : new Core.Alarms.AlarmConfiguration(),
+            // роли опциональны так же (docs/users-plan.md §4.1)
+            Users = reader.HasEntry("roles.bin")
+                ? RolesSectionReader.Read(reader.ReadEntry("roles.bin"))
+                : new Core.Users.UsersConfiguration(),
             // схемы и шаблоны опциональны: перечисление через манифест
             // по префиксу (концепт §11.1), отсутствие — пустые списки
             Schemes = ReadEntries<Core.Schemes.Scheme>(reader, "schemes/",

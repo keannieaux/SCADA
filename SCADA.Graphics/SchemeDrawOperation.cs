@@ -21,11 +21,26 @@ public readonly record struct SchemeElementVisual(
     string Text,
     string? SymbolPath);
 
-public sealed class SchemeDrawOperation(Rect bounds, List<SchemeElementVisual> items, double panX, double panY, double zoom, ConcurrentStack<List<SchemeElementVisual>> pool) : ICustomDrawOperation
+public sealed class SchemeDrawOperation(Rect bounds, List<SchemeElementVisual> items, double panX, double panY, double zoom, ConcurrentStack<List<SchemeElementVisual>> pool, SKPicture? staticPicture) : ICustomDrawOperation
 
 {
     public Rect Bounds { get; } = bounds;
+    private static readonly SKTypeface s_typeface=SKTypeface.FromFamilyName("Cascadia Code");
+    private static readonly SKFont s_font=new(s_typeface,14);
+    private static readonly SKPaint s_outlinePaint=new(){Color=ThemeColors.Resolve("BorderColor", new SKColor(0x3A,0x3F,0x44)), IsAntialias=true, Style=SKPaintStyle.Stroke, StrokeWidth=2};
+    private static readonly SKPaint s_badgePaint=new(){Color=ThemeColors.Resolve("WarnColor", new SKColor(0xE8,0xA3,0x3D)), IsAntialias=true};
+    private static readonly SKPaint s_textPaint=new(){Color=ThemeColors.Resolve("TextColor", new SKColor(0xE7,0xE9,0xEA)), IsAntialias=true};
+    private static readonly Dictionary<SKColor, SKPaint> s_fillPaints=new();
 
+    private static SKPaint GetFillPaint(SKColor color)
+    {
+        if(!s_fillPaints.TryGetValue(color,out var paint))
+        {
+            paint=new SKPaint{Color=color,IsAntialias=true};
+            s_fillPaints[color]=paint;
+        }
+        return paint;
+    }
     public void Render(ImmediateDrawingContext context)
     {
         var lease=context.TryGetFeature<ISkiaSharpApiLeaseFeature>()?.Lease();
@@ -35,7 +50,7 @@ public sealed class SchemeDrawOperation(Rect bounds, List<SchemeElementVisual> i
         using (lease)
         {
             var sw=Stopwatch.StartNew();
-            DrawItems(lease.SkCanvas, items, panX, panY, zoom);
+            DrawItems(lease.SkCanvas, items, panX, panY, zoom, staticPicture);
             Debug.WriteLine($"Draw: {sw.Elapsed.TotalMilliseconds:F2} мс, отрисовано {items.Count} элементов");
         }
     }
@@ -43,11 +58,13 @@ public sealed class SchemeDrawOperation(Rect bounds, List<SchemeElementVisual> i
     // public static: само рисование доступно headless-замерам (бенчмарки на
     // SKSurface без Avalonia); Render — тонкая обёртка над ним
     public static void DrawItems(SKCanvas canvas, IReadOnlyList<SchemeElementVisual> items,
-        double panX, double panY, double zoom)
+        double panX, double panY, double zoom, SKPicture? staticPicture=null)
     {
         canvas.Save();
         canvas.Translate((float)panX, (float)panY);
         canvas.Scale((float)zoom);
+        if(staticPicture is not null)
+            canvas.DrawPicture(staticPicture);
         foreach (var item in items)
         {
             var rect=new SKRect(
@@ -59,14 +76,11 @@ public sealed class SchemeDrawOperation(Rect bounds, List<SchemeElementVisual> i
 
             if (item.HasFillLevel)
             {
-                var outlineColor=ThemeColors.Resolve("BorderColor", new SKColor(0x3A,0x3F,0x44));
-                using var outline=new SKPaint{Color=outlineColor, IsAntialias=true, Style=SKPaintStyle.Stroke, StrokeWidth=2};
-                canvas.DrawRect(rect,outline);
+                canvas.DrawRect(rect, s_outlinePaint);
 
                 float fillHeight=rect.Height*(float)item.FillLevel;
                 var fillRect=new SKRect(rect.Left, rect.Bottom-fillHeight,rect.Right,rect.Bottom);
-                using var fillPaint=new SKPaint{Color=item.Fill,IsAntialias=true};
-                canvas.DrawRect(fillRect,fillPaint);
+                canvas.DrawRect(fillRect,GetFillPaint(item.Fill));
             }
             else if(item.Kind==ElementKind.Symbol && item.SymbolPath is {} path)
             {
@@ -83,8 +97,7 @@ public sealed class SchemeDrawOperation(Rect bounds, List<SchemeElementVisual> i
             }
             else
             {
-                using var paint=new SKPaint{Color=item.Fill, IsAntialias=true};
-
+                var paint=GetFillPaint(item.Fill);
                 if(item.Kind==ElementKind.Ellipse)
                     canvas.DrawOval(rect,paint);
                 else
@@ -93,21 +106,11 @@ public sealed class SchemeDrawOperation(Rect bounds, List<SchemeElementVisual> i
 
             if (item.QualityBad)
             {
-                var badgeColor=ThemeColors.Resolve("WarnColor",new SKColor(0xE8,0xA3,0x3D));
-                using var badge=new SKPaint{Color=badgeColor,IsAntialias=true};
-                canvas.DrawCircle(rect.Right-6,rect.Top+6,4,badge);
+                canvas.DrawCircle(rect.Right-6,rect.Top+6,4,s_badgePaint);
             }
 
-            if (!string.IsNullOrEmpty(item.Text))
-            {
-                using var font=new SKFont(SKTypeface.FromFamilyName("Cascadia Code"),14);
-                using var textPaint=new SKPaint
-                {
-                    Color=ThemeColors.Resolve("TextColor", new SKColor(0xE7,0xE9,0xEA)),
-                    IsAntialias=true
-                };
-                canvas.DrawText(item.Text, rect.MidX, rect.MidY + font.Size / 3, SKTextAlign.Center, font, textPaint);
-            }
+            if(!string.IsNullOrEmpty(item.Text))
+                canvas.DrawText(item.Text, rect.MidX, rect.MidY+s_font.Size/3, SKTextAlign.Center,s_font,s_textPaint);
 
             canvas.Restore();
         }

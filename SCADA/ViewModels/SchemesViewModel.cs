@@ -6,7 +6,7 @@ namespace SCADA.ViewModels;
 
 public sealed class SchemesViewModel : ViewModelBase
 {
-    private const bool UseLoadTestScheme = false; // true — нагрузочная схема 500 элементов, каждый 2-й вращается (docs/scheme-rendering-benchmark.md)
+    private const bool UseLoadTestScheme = true; // true — нагрузочная схема 500 элементов, каждый 2-й вращается (docs/scheme-rendering-benchmark.md)
 
     public SchemeCanvas Canvas {get;}
 

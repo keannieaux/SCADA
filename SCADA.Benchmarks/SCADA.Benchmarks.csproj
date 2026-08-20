@@ -9,6 +9,14 @@
 
   <ItemGroup>
     <PackageReference Include="BenchmarkDotNet" />
+    <!-- только для стенда SymbolAnimationBenchmarks: проверка концепции
+         анимированных символов (SMIL-SVG и Lottie). В SCADA.Graphics не тянется. -->
+    <PackageReference Include="Svg.Skia" />
+    <PackageReference Include="SkiaSharp.Skottie" VersionOverride="4.148.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Assets\**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <PropertyGroup>

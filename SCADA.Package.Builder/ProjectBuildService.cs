@@ -156,6 +156,7 @@ public static class ProjectBuildService
                         stringGuard.CheckCompiled(compiled.TagIndices,
                             $"alarm:{rule.Name}",
                             $"Правило сигнализации '{rule.Name}'", diagnostics);
+                        CheckNoSessionTags(config, rule.Name, compiled.TagIndices, diagnostics);
                         rule.CompiledExpressionIndex = pool.Count; // до дедупликации
                         rule.CompiledTagIndices = compiled.TagIndices;
                         pool.Add(compiled);
@@ -168,6 +169,28 @@ public static class ProjectBuildService
                     }
                     break;
             }
+        }
+    }
+
+    /// <summary>
+    /// Сессионный тег в условии правила сигнализации — ошибка сборки
+    /// (docs/session-tags-concept.md §2.3). Правила считаются на сервере,
+    /// где сессионных значений нет вовсе: правило читало бы пустоту.
+    /// Прямую ссылку порогового правила ловит ProjectValidator по имени тега;
+    /// здесь — теги внутри выражения, их знает только компилятор.
+    /// </summary>
+    private static void CheckNoSessionTags(ProjectConfiguration config, string ruleName,
+        int[] tagIndices, List<BuildDiagnostic> diagnostics)
+    {
+        foreach (int index in tagIndices)
+        {
+            var tag = config.Tags.FirstOrDefault(t => t.Id.Value == index);
+            if (tag is not { Scope: TagScope.Session })
+                continue;
+            diagnostics.Add(new BuildDiagnostic(BuildSeverity.Error, $"alarm:{ruleName}",
+                $"Правило сигнализации '{ruleName}': условие ссылается на сессионный тег " +
+                $"'{tag.Name}' — правила считаются на сервере, где сессионных " +
+                "значений нет"));
         }
     }
 

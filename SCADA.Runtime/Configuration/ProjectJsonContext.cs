@@ -14,6 +14,7 @@ namespace SCADA.Runtime.Configuration;
                  typeof(ChannelIdJsonConverter),
                  typeof(JsonStringEnumConverter<TagDataType>),
                  typeof(JsonStringEnumConverter<TagOrigin>),
+                 typeof(JsonStringEnumConverter<TagScope>),
                  typeof(JsonStringEnumConverter<AlarmType>),
                  typeof(JsonStringEnumConverter<ThresholdKind>),
                  typeof(JsonStringEnumConverter<AlarmSeverity>),

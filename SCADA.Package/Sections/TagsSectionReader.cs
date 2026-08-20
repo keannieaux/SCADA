@@ -59,6 +59,8 @@ public static class TagsSectionReader
         }
         if (stream.Position < recordEnd)
             tag.RequiresWriteConfirmation = reader.ReadBoolean();
+        if (stream.Position < recordEnd)
+            tag.Scope = (TagScope)reader.ReadByte();
 
         // хвост записи (поля более нового формата) пропускаем
         stream.Position = recordEnd;

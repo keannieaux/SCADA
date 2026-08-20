@@ -53,6 +53,9 @@ public static class TagsSectionWriter
             WriteNullableInt(record, tag.Precision);
             // M7: подтверждение записи — в хвосте записи
             record.Write(tag.RequiresWriteConfirmation);
+            // область значения: сессионные теги (session-tags-concept.md §2) —
+            // в хвосте записи
+            record.Write((byte)tag.Scope);
             record.Flush();
         }
 

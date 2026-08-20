@@ -50,9 +50,13 @@ public class ProjectLoaderTests : IDisposable
         // загрузчик добавляет диагностику канала (§7.4): 1 устройство + 7 тегов,
         // диагностику архива (§7.5): 1 устройство + свой набор метрик,
         // и системные теги аварий (A5): псевдодевайс "@Alarms" + корневые метрики
-        Assert.Equal(2 + 7 + ArchiveDiagnostics.MetricDefinitions.Count + SCADA.Core.Alarms.AlarmTags.SystemMetrics.Length,
+        // и системные сессионные теги: @User.* (3), @Right.* по системным
+        // правам, @Station.* (2) — docs/session-tags-concept.md §3
+        Assert.Equal(2 + 7 + ArchiveDiagnostics.MetricDefinitions.Count
+                + SCADA.Core.Alarms.AlarmTags.SystemMetrics.Length
+                + 3 + SCADA.Core.Users.SystemPermissions.All.Count + 2,
             config.Tags.Count);
-        Assert.Equal(4, config.Devices.Count);
+        Assert.Equal(5, config.Devices.Count); // + псевдодевайс "@Session"
         Assert.Single(config.Channels);
         Assert.Equal("@Ch0", config.Devices[1].Name);
         Assert.Equal("@Ch0.Connected", config.Tags[2].Name);

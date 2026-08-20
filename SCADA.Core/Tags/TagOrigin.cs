@@ -11,5 +11,10 @@ public enum TagOrigin : byte
 {
     Process,
     Diagnostics,
-    Alarm
+    Alarm,
+
+    /// <summary>Сгенерирован подсистемой сессий: @User.*, @Right.*, @Station.*
+    /// (docs/session-tags-concept.md §3). Значения таких тегов персональны
+    /// для АРМа — область <see cref="TagScope.Session"/>.</summary>
+    Session = 3
 }

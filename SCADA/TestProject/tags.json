@@ -16,7 +16,8 @@
     { "id": 12, "name": "Temperature9", "dataType": "analog", "deviceId": 0, "address": "sin:10", "minValue": 0, "maxValue": 100, "units": "°C" },
     { "id": 13, "name": "Temperature10", "dataType": "analog", "deviceId": 0, "address": "sin:10", "minValue": 0, "maxValue": 100, "units": "°C" },
     { "id": 14, "name": "PumpCmd", "dataType": "discrete", "deviceId": 1, "initValue": 0, "isWritable": true },
-    { "id": 15, "name": "StatusText", "dataType": "string", "deviceId": 1 }
+    { "id": 15, "name": "StatusText", "dataType": "string", "deviceId": 1 },
+    { "id": 16, "name": "SetpointCmd", "dataType": "analog", "deviceId": 1, "initValue": 20, "isWritable": true, "units": "°C" }
 
   ]
 }

@@ -27,6 +27,7 @@ public sealed class TagsViewModel : ViewModelBase
 {
     private readonly IRuntimeClient _runtimeClient;
     private readonly TagRowViewModel[] _rowsByTagId;
+    private readonly TagId[] _changedBuffer;
     private long _epoch;
 
     public ObservableCollection<TagRowViewModel> Tags { get; } = new();
@@ -35,6 +36,7 @@ public sealed class TagsViewModel : ViewModelBase
     {
         _runtimeClient = runtimeClient;
         _rowsByTagId = new TagRowViewModel[config.Tags.Count];
+        _changedBuffer = new TagId[config.Tags.Count];
 
         foreach (var tag in config.Tags)
         {
@@ -51,17 +53,36 @@ public sealed class TagsViewModel : ViewModelBase
     private void Poll()
     {
         long latestEpoch = _runtimeClient.CurrentEpoch;
-        var changed = new TagId[_rowsByTagId.Length];
-        int count = _runtimeClient.GetChangedSince(_epoch, changed);
+        int count = _runtimeClient.GetChangedSince(_epoch, _changedBuffer);
 
-        for (int i = 0; i < count; i++)
+        // GetChangedSince возвращает ПОЛНОЕ число изменившихся тегов, а буфер
+        // заполняет лишь настолько, насколько хватило места (TagTable.cs);
+        // вдобавок клиент сводит проектную и сессионную таблицы, поэтому
+        // изменений бывает больше, чем тегов проекта, и приходят чужие Id.
+        // Не влезло — перечитываем всё: иначе часть строк молча застынет
+        // до следующего своего изменения.
+        if (count > _changedBuffer.Length)
         {
-            var value = _runtimeClient.Read(changed[i]);
-            var row = _rowsByTagId[changed[i].Value];
-            row.Value = value.Value;
-            row.Quality = value.Quality;
+            foreach (var row in Tags)
+                Update(row);
+        }
+        else
+        {
+            for (int i = 0; i < count; i++)
+            {
+                int index = _changedBuffer[i].Value;
+                if (index >= 0 && index < _rowsByTagId.Length && _rowsByTagId[index] is { } row)
+                    Update(row);
+            }
         }
 
         _epoch = latestEpoch;
+    }
+
+    private void Update(TagRowViewModel row)
+    {
+        var value = _runtimeClient.Read(row.Id);
+        row.Value = value.Value;
+        row.Quality = value.Quality;
     }
 }

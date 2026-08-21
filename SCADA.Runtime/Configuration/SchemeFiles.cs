@@ -110,6 +110,7 @@ public class SchemeEventDto
 [JsonDerivedType(typeof(ClosePopupActionDto), "ClosePopup")]
 [JsonDerivedType(typeof(BackActionDto), "Back")]
 [JsonDerivedType(typeof(ShowDialogActionDto), "ShowDialog")]
+[JsonDerivedType(typeof(SetPropertyActionDto), "SetProperty")]
 public abstract class SchemeActionDto
 {
     /// <summary>Условие «выполнять, если…» — выражение, концепт §5.2.</summary>
@@ -164,4 +165,22 @@ public sealed class BackActionDto : SchemeActionDto;
 public sealed class ShowDialogActionDto : SchemeActionDto
 {
     public string? Message { get; set; }
+}
+
+// { "type": "SetProperty", "element": "Панель", "property": 5, "value": "false" }
+public sealed class SetPropertyActionDto : SchemeActionDto
+{
+    /// <summary>Имя элемента-цели в своей схеме (внутри шаблона — в шаблоне).</summary>
+    public string? Element { get; set; }
+
+    /// <summary>id свойства из ElementSchemas — как у привязок и свойств.</summary>
+    public int Property { get; set; }
+
+    /// <summary>Значение строкой, тип берётся из дескриптора свойства —
+    /// та же форма, что у properties и стопов.</summary>
+    public string? Value { get; set; }
+
+    /// <summary>Значение-выражение (C5): задано — value должно отсутствовать.
+    /// Допустимо только для числовых по существу свойств.</summary>
+    public string? ValueExpression { get; set; }
 }

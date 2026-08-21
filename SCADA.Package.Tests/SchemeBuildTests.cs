@@ -977,4 +977,206 @@ public class SchemeBuildTests : IDisposable
         Assert.Contains(result.Diagnostics,
             d => d.Severity == BuildSeverity.Error && d.Message.Contains("незакрытый плейсхолдер"));
     }
+
+    // --- C5: действие «задать свойство элемента» ---
+
+    /// <summary>Схема из кнопки и цели: кнопка задаёт свойство элемента
+    /// с именем name, остальное подставляется тестом.</summary>
+    private void WriteSetPropertyScheme(string fileName, string targetJson,
+        string actionJson)
+        => WriteScheme(fileName, $$"""
+            {
+              "elements": [
+                {{targetJson}},
+                {
+                  "kind": "Rectangle", "name": "Кнопка",
+                  "x": 0, "y": 60, "width": 40, "height": 20,
+                  "events": [{"kind": "Click", "actions": [{{actionJson}}]}]
+                }
+              ]
+            }
+            """);
+
+    private const string PanelJson =
+        """{"kind": "Rectangle", "name": "Панель", "x": 0, "y": 0, "width": 100, "height": 50}""";
+
+    [Fact]
+    public void SetProperty_ConstantAndExpression_RoundTrip()
+    {
+        // 5 = Visible (Boolean), 1 = Opacity (Number): константа и выражение
+        WriteSetPropertyScheme("overview.scheme", PanelJson,
+            """
+            {"type": "SetProperty", "element": "Панель", "property": 5, "value": "false"},
+            {"type": "SetProperty", "element": "Панель", "property": 1,
+             "valueExpression": "Boiler1.Temp / 100"}
+            """);
+
+        var result = ProjectBuildService.Build(ProjectDir, PackagePath);
+
+        Assert.True(result.Success, string.Join("; ",
+            result.Diagnostics.Select(d => d.Message)));
+        using var reader = PackageReader.Open(PackagePath);
+        var scheme = PackageProjectLoader.Load(reader).Schemes.Single();
+        var actions = scheme.Elements.Single(e => e.Name == "Кнопка")
+            .Events[0].Actions;
+
+        var constant = Assert.IsType<SetPropertyAction>(actions[0]);
+        Assert.Equal("Панель", constant.ElementName);
+        Assert.Equal(5, constant.PropertyId);
+        Assert.False(constant.Value!.Value.AsBool);
+        Assert.Null(constant.CompiledValueIndex);
+
+        // выражение уехало в общий пул code.bin, текста в секции нет (§11)
+        var computed = Assert.IsType<SetPropertyAction>(actions[1]);
+        Assert.NotNull(computed.CompiledValueIndex);
+        Assert.Null(computed.Value);
+        Assert.Null(computed.ValueExpression);
+        Assert.Equal([0], computed.CompiledValueTagIndices!); // Boiler1.Temp
+    }
+
+    [Fact]
+    public void SetProperty_UnknownElement_Fails()
+    {
+        WriteSetPropertyScheme("overview.scheme", PanelJson,
+            """{"type": "SetProperty", "element": "Панел", "property": 5, "value": "false"}""");
+
+        var result = ProjectBuildService.Build(ProjectDir, PackagePath);
+
+        Assert.False(result.Success);
+        Assert.Contains(result.Diagnostics,
+            d => d.Severity == BuildSeverity.Error && d.Message.Contains("не найден"));
+    }
+
+    [Fact]
+    public void SetProperty_ElementOfAnotherScheme_Fails()
+    {
+        // граница адресации: элемент есть в проекте, но на другой схеме —
+        // сборка не может знать, открыта ли та схема в момент клика
+        WriteScheme("detail.scheme", $$"""{"elements": [{{PanelJson}}]}""");
+        WriteSetPropertyScheme("overview.scheme",
+            """{"kind": "Rectangle", "name": "Фон", "x": 0, "y": 0, "width": 10, "height": 10}""",
+            """{"type": "SetProperty", "element": "Панель", "property": 5, "value": "false"}""");
+
+        var result = ProjectBuildService.Build(ProjectDir, PackagePath);
+
+        Assert.False(result.Success);
+        Assert.Contains(result.Diagnostics,
+            d => d.Severity == BuildSeverity.Error &&
+                 d.Message.Contains("не найден") && d.Message.Contains("границы"));
+    }
+
+    [Fact]
+    public void SetProperty_BoundProperty_Fails()
+    {
+        // свойством управляет привязка: заданное значение затрёт пересчётом
+        WriteSetPropertyScheme("overview.scheme",
+            """
+            {"kind": "Rectangle", "name": "Панель", "x": 0, "y": 0, "width": 100, "height": 50,
+             "bindings": [{"property": 5, "expression": "Pump1.Running"}]}
+            """,
+            """{"type": "SetProperty", "element": "Панель", "property": 5, "value": "false"}""");
+
+        var result = ProjectBuildService.Build(ProjectDir, PackagePath);
+
+        Assert.False(result.Success);
+        Assert.Contains(result.Diagnostics,
+            d => d.Severity == BuildSeverity.Error && d.Message.Contains("управляет привязка"));
+    }
+
+    [Fact]
+    public void SetProperty_NotAnimatableProperty_Fails()
+    {
+        // 8 = TextFormat: свойство есть, но в рантайме не меняется
+        WriteSetPropertyScheme("overview.scheme", PanelJson,
+            """{"type": "SetProperty", "element": "Панель", "property": 8, "value": "F2"}""");
+
+        var result = ProjectBuildService.Build(ProjectDir, PackagePath);
+
+        Assert.False(result.Success);
+        Assert.Contains(result.Diagnostics,
+            d => d.Severity == BuildSeverity.Error && d.Message.Contains("неанимируемо"));
+    }
+
+    [Fact]
+    public void SetProperty_ExpressionOnColor_Fails()
+    {
+        // 10 = FillColor: вычисляемый цвет — привязка со стопами, не арифметика
+        WriteSetPropertyScheme("overview.scheme", PanelJson,
+            """
+            {"type": "SetProperty", "element": "Панель", "property": 10,
+             "valueExpression": "Boiler1.Temp"}
+            """);
+
+        var result = ProjectBuildService.Build(ProjectDir, PackagePath);
+
+        Assert.False(result.Success);
+        Assert.Contains(result.Diagnostics,
+            d => d.Severity == BuildSeverity.Error &&
+                 d.Message.Contains("выражение недопустимо"));
+    }
+
+    [Fact]
+    public void SetProperty_InsideTemplate_ResolvesWithinTemplate()
+    {
+        // внутри шаблона цель ищется в его теле — экземпляров может быть сто,
+        // и у каждого своя «Крышка»
+        WriteTemplate("pump.scheme", """
+            {
+              "elements": [
+                {"kind": "Rectangle", "name": "Крышка", "x": 0, "y": 0, "width": 10, "height": 10},
+                {"kind": "Rectangle", "x": 0, "y": 20, "width": 10, "height": 10,
+                 "events": [{"kind": "Click", "actions": [
+                   {"type": "SetProperty", "element": "Крышка", "property": 5, "value": "true"}]}]}
+              ]
+            }
+            """);
+        WriteScheme("overview.scheme", """
+            {
+              "elements": [{"kind": "Instance", "templateName": "pump",
+                            "x": 0, "y": 0, "width": 100, "height": 100}]
+            }
+            """);
+
+        var result = ProjectBuildService.Build(ProjectDir, PackagePath);
+
+        Assert.True(result.Success, string.Join("; ",
+            result.Diagnostics.Select(d => d.Message)));
+    }
+
+    [Fact]
+    public void DuplicateElementNames_Fail()
+    {
+        // имя — адрес действия, дубликат делает адрес неоднозначным;
+        // регистр не спасает: «Панель» и «панель» — опечатка, а не два элемента
+        WriteScheme("overview.scheme", """
+            {
+              "elements": [
+                {"kind": "Rectangle", "name": "Панель", "x": 0, "y": 0, "width": 10, "height": 10},
+                {"kind": "Rectangle", "name": "панель", "x": 0, "y": 20, "width": 10, "height": 10}
+              ]
+            }
+            """);
+
+        var result = ProjectBuildService.Build(ProjectDir, PackagePath);
+
+        Assert.False(result.Success);
+        Assert.Contains(result.Diagnostics,
+            d => d.Severity == BuildSeverity.Error && d.Message.Contains("встречается 2 раз"));
+    }
+
+    [Fact]
+    public void SetProperty_ValueAndExpression_Fails()
+    {
+        WriteSetPropertyScheme("overview.scheme", PanelJson,
+            """
+            {"type": "SetProperty", "element": "Панель", "property": 1,
+             "value": "1", "valueExpression": "Boiler1.Temp"}
+            """);
+
+        var result = ProjectBuildService.Build(ProjectDir, PackagePath);
+
+        Assert.False(result.Success);
+        Assert.Contains(result.Diagnostics,
+            d => d.Severity == BuildSeverity.Error && d.Message.Contains("оставьте одно"));
+    }
 }

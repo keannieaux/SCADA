@@ -459,6 +459,19 @@ public static class ProjectBuildService
                 }
                 break;
 
+            // C5: значение-выражение действия «задать свойство». Допустимость
+            // выражения для этого типа свойства проверяет ValidateSetProperty:
+            // здесь известен только текст, а вид элемента-цели — нет
+            case SetPropertyAction { ValueExpression: { Length: > 0 } expression } set:
+                if (TryCompileActionExpression(expression, schemeName,
+                        $"{context}, значение SetProperty", catalog, pool, diagnostics,
+                        stringGuard, out int setIndex, out int[]? setTagIndices))
+                {
+                    set.CompiledValueIndex = setIndex;
+                    set.CompiledValueTagIndices = setTagIndices;
+                }
+                break;
+
             case OpenSchemeAction open when open.Parameters is { Count: > 0 }:
                 open.CompiledParameters = CompileStringMap(open.Parameters, schemeName,
                     context, catalog, pool, diagnostics, stringGuard);
@@ -677,6 +690,8 @@ public static class ProjectBuildService
                 templateParameters: null, catalog, diagnostics);
             ValidateSchemeElements(scheme.Name, scheme.Elements, templatesByName,
                 templateParameters: null, catalog, diagnostics);
+            ValidateElementNames(scheme.Name, scheme.Elements, diagnostics);
+            ValidateSetProperty(scheme.Name, scheme.Elements, scheme.Events, diagnostics);
         }
         foreach (var template in config.Templates)
         {
@@ -685,6 +700,8 @@ public static class ProjectBuildService
                 templateParameters, catalog, diagnostics);
             ValidateSchemeElements(template.Name, template.Elements, templatesByName,
                 templateParameters, catalog, diagnostics);
+            ValidateElementNames(template.Name, template.Elements, diagnostics);
+            ValidateSetProperty(template.Name, template.Elements, template.Events, diagnostics);
         }
 
         ValidateTemplateCycles(templatesByName, diagnostics);
@@ -792,6 +809,131 @@ public static class ProjectBuildService
         foreach (var group in config.Templates.GroupBy(t => t.Name).Where(g => g.Count() > 1))
             diagnostics.Add(new BuildDiagnostic(BuildSeverity.Error, $"scheme:{group.Key}",
                 $"Дубликат имени шаблона '{group.Key}'"));
+    }
+
+    /// <summary>
+    /// C5: имя элемента стало адресом (действие «задать свойство»), поэтому
+    /// дубликат означает «попал не в тот элемент», причём молча. Проверяем
+    /// безусловно, а не только для адресуемых имён: «сегодня на него никто
+    /// не ссылается» — это отложенный сюрприз.
+    ///
+    /// Область уникальности — тело одной схемы или одного шаблона, и считается
+    /// она ДО раскрытия экземпляров. Сто насосов из одного шаблона дадут на
+    /// экране сто элементов «Корпус», и это нормально: имя внутри экземпляра
+    /// разрешается в его границах. Контейнер отдельной областью не делается —
+    /// область видимости появляется там, где появляется копирование, то есть
+    /// у шаблона; внутри схемы имена плоские.
+    ///
+    /// Сравнение без учёта регистра — как у имён тегов: «Панель» и «панель»
+    /// в одном проекте это опечатка, а не два элемента.
+    /// </summary>
+    private static void ValidateElementNames(string schemeName,
+        IReadOnlyList<SchemeElement> elements, List<BuildDiagnostic> diagnostics)
+    {
+        foreach (var group in elements
+                     .Where(e => !string.IsNullOrEmpty(e.Name))
+                     .GroupBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
+                     .Where(g => g.Count() > 1))
+            diagnostics.Add(new BuildDiagnostic(BuildSeverity.Error, $"scheme:{schemeName}",
+                $"Схема '{schemeName}': имя элемента '{group.Key}' встречается " +
+                $"{group.Count()} раз — по имени элемент адресуют действия, " +
+                "дубликат делает адрес неоднозначным"));
+    }
+
+    /// <summary>
+    /// C5: проверка действия «задать свойство элемента». Всё, что нельзя
+    /// увидеть в одном файле исходника, проверяется здесь.
+    ///
+    /// Цель ищется только в своей схеме (внутри шаблона — в теле шаблона):
+    /// адресация за границу схемы не ходит намеренно — имя сборка проверила бы,
+    /// а «открыта ли та схема сейчас» нет, и промах выглядел бы как кнопка,
+    /// которая иногда не работает. Межсхемное состояние — сессионные теги.
+    ///
+    /// Свойство под привязкой задавать запрещено: следующий пересчёт привязки
+    /// затрёт заданное, и оператор увидит мигание вместо эффекта. Свойством
+    /// управляет либо тег, либо человек — не оба.
+    /// </summary>
+    private static void ValidateSetProperty(string schemeName,
+        IReadOnlyList<SchemeElement> elements, IReadOnlyList<SchemeEvent> schemeEvents,
+        List<BuildDiagnostic> diagnostics)
+    {
+        string source = $"scheme:{schemeName}";
+        Dictionary<string, SchemeElement>? byName = null;
+
+        void Check(SchemeAction action, string context)
+        {
+            if (action is not SetPropertyAction set)
+                return;
+
+            string where = $"Схема '{schemeName}', {context}, действие SetProperty";
+            void Error(string message) => diagnostics.Add(
+                new BuildDiagnostic(BuildSeverity.Error, source, $"{where}: {message}"));
+
+            if (string.IsNullOrWhiteSpace(set.ElementName))
+            {
+                Error("не задано имя элемента");
+                return;
+            }
+
+            // индекс строится лениво: действие редкое, схем много
+            byName ??= BuildElementIndex(elements);
+            if (!byName.TryGetValue(set.ElementName, out var target))
+            {
+                Error($"элемент '{set.ElementName}' не найден на этой схеме — " +
+                      "адресация не выходит за её границы (внутри шаблона — " +
+                      "за границы шаблона); состояние между схемами — сессионный тег");
+                return;
+            }
+
+            // существование свойства у вида и анимируемость — те же правила,
+            // что у привязок: свойство, которое нельзя менять в рантайме,
+            // нельзя менять ничем
+            if (ElementSchemas.ValidateBinding(target.Kind, set.PropertyId) is { } problem)
+            {
+                Error(problem);
+                return;
+            }
+
+            var def = ElementSchemas.Find(target.Kind, set.PropertyId)!;
+
+            if (set.Value is { } value && value.Type != def.Type)
+                Error($"значение типа {value.Type} не подходит свойству " +
+                      $"'{def.Name}' типа {def.Type}");
+
+            if (!string.IsNullOrWhiteSpace(set.ValueExpression) &&
+                def.Type is PropertyType.String or PropertyType.Color)
+                Error($"выражение недопустимо для свойства '{def.Name}' типа {def.Type}: " +
+                      (def.Type == PropertyType.String
+                          ? "строк в ВМ нет"
+                          : "вычисляемый цвет задаётся привязкой со стопами — " +
+                            "там цвета названы и участвуют в теме"));
+
+            if (target.Bindings.Any(b => b.PropertyId == set.PropertyId))
+                Error($"свойством '{def.Name}' элемента '{set.ElementName}' управляет " +
+                      "привязка: заданное значение затрёт следующим пересчётом");
+        }
+
+        foreach (var schemeEvent in schemeEvents)
+            foreach (var action in schemeEvent.Actions)
+                Check(action, "событие экрана");
+
+        for (int i = 0; i < elements.Count; i++)
+            foreach (var schemeEvent in elements[i].Events)
+                foreach (var action in schemeEvent.Actions)
+                    Check(action, $"элемент {ElementLabel(elements[i], i)}");
+    }
+
+    /// <summary>Индекс элементов по имени для адресации действиями. Дубликаты
+    /// уже отмечены ошибкой (ValidateElementNames) — здесь побеждает первый,
+    /// чтобы не сыпать вторую диагностику про то же самое.</summary>
+    private static Dictionary<string, SchemeElement> BuildElementIndex(
+        IReadOnlyList<SchemeElement> elements)
+    {
+        var index = new Dictionary<string, SchemeElement>(StringComparer.OrdinalIgnoreCase);
+        foreach (var element in elements)
+            if (!string.IsNullOrEmpty(element.Name))
+                index.TryAdd(element.Name, element);
+        return index;
     }
 
     private static void ValidateSchemeElements(string schemeName,

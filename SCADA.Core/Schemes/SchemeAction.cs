@@ -71,3 +71,32 @@ public sealed record ClosePopupAction : SchemeAction;
 public sealed record BackAction : SchemeAction;
 
 public sealed record ShowDialogAction(string Message) : SchemeAction;
+
+/// <summary>
+/// C5: задать свойство элемента (docs/scheme-controls-plan.md). Для состояний
+/// без памяти и без индикации: сбросить масштаб, снять выделение, свернуть
+/// панель. Не альтернатива тегам — второй инструмент.
+///
+/// Адресация — по имени элемента <b>в границах своей схемы</b>, а внутри тела
+/// шаблона — в границах экземпляра. Дотянуться до элемента чужой схемы нельзя
+/// намеренно: сборка проверила бы имя, но не то, открыта ли та схема сейчас,
+/// и промах выглядел бы как кнопка, которая иногда не работает. Состояние,
+/// живущее между схемами, — это сессионный тег: у него есть память, и он не
+/// зависит от того, что на экране.
+///
+/// Значение — константа <see cref="Value"/> или <see cref="ValueExpression"/>,
+/// как у WriteTag (C2); заданы оба или ни одного — ошибка. Выражение допустимо
+/// только для числовых по существу свойств (Number/Boolean/Choice): строк в ВМ
+/// нет, а вычисляемый цвет — это привязка со стопами, где цвета названы и
+/// участвуют в теме (§11.3).
+/// </summary>
+public sealed record SetPropertyAction(string ElementName, int PropertyId,
+    PropertyValue? Value = null) : SchemeAction
+{
+    /// <summary>Значение-выражение; задано — Value должно быть пустым.</summary>
+    public string? ValueExpression { get; init; }
+
+    // --- заполняются при сборке пакета ---
+    public int? CompiledValueIndex { get; set; }
+    public int[]? CompiledValueTagIndices { get; set; }
+}

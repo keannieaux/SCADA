@@ -66,6 +66,19 @@ public static class ActionCatalog
                 new("Message", "Текст", ActionParamType.Text, Required: true,
                     GetValue: a => ((ShowDialogAction)a).Message),
             ]),
+
+        // C5: цель — элемент своей схемы; за её границу адресация не ходит,
+        // межсхемное состояние живёт в сессионных тегах
+        new(7, typeof(SetPropertyAction), "SetProperty", "Задать свойство элемента",
+            ActionApplicability.All,
+            [
+                new("Element", "Элемент", ActionParamType.ElementRef, Required: true,
+                    GetValue: a => ((SetPropertyAction)a).ElementName),
+                new("Property", "Свойство", ActionParamType.PropertyRef, Required: true,
+                    GetValue: a => ((SetPropertyAction)a).PropertyId),
+                new("Value", "Значение", ActionParamType.PropertyValue, Required: true,
+                    CanBeExpression: true, GetValue: a => ((SetPropertyAction)a).Value),
+            ]),
     ];
 
     private static readonly Dictionary<byte, ActionDef> ByCode = All.ToDictionary(d => d.TypeCode);

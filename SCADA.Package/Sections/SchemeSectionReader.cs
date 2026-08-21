@@ -313,9 +313,28 @@ public static class SchemeSectionReader
             case 5:
                 action = new BackAction();
                 break;
-            default:
+            case 6:
                 action = new ShowDialogAction(reader.ReadString());
                 break;
+            case 7:
+            {
+                // C5: задать свойство элемента
+                string elementName = reader.ReadString();
+                int propertyId = reader.ReadInt32();
+                PropertyValue? value = reader.ReadBoolean()
+                    ? ReadPropertyValue(reader)
+                    : null;
+                var set = new SetPropertyAction(elementName, propertyId, value);
+                int valueIndex = reader.ReadInt32();
+                set.CompiledValueIndex = valueIndex < 0 ? null : valueIndex;
+                set.CompiledValueTagIndices = ReadTagIndices(reader);
+                action = set;
+                break;
+            }
+            default:
+                // недостижимо: тип уже проверен по каталогу выше
+                throw new InvalidOperationException(
+                    $"Тип действия {type} известен каталогу, но не читается");
         }
 
         int conditionIndex = reader.ReadInt32();

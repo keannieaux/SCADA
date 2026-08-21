@@ -137,6 +137,22 @@ public static class ElementSchemas
     public static PropertyDef? Find(ElementKind kind, int propertyId)
         => _byKind[kind].FirstOrDefault(d => d.Id == propertyId);
 
+    /// <summary>Дескриптор по одному только id, без вида элемента: id
+    /// глобально уникален (см. правила расширения выше), поэтому тип значения
+    /// известен и до того, как выяснится, у какого вида это свойство.
+    /// Нужно там, где значение разбирается раньше, чем находится цель, —
+    /// загрузчик исходников читает значение действия «задать свойство» (C5).
+    /// Принадлежность свойства виду элемента этим НЕ проверяется: это дело
+    /// <see cref="Find(ElementKind, int)"/> и валидации сборки.</summary>
+    public static PropertyDef? FindAny(int propertyId)
+    {
+        foreach (var defs in _byKind.Values)
+            foreach (var def in defs)
+                if (def.Id == propertyId)
+                    return def;
+        return null;
+    }
+
     /// <summary>Все зарегистрированные виды — для тестов целостности реестра.</summary>
     public static IReadOnlyCollection<ElementKind> Kinds => _byKind.Keys;
 

@@ -307,6 +307,7 @@ public static class SchemeFileLoader
             ShowDialogActionDto a => !string.IsNullOrWhiteSpace(a.Message)
                 ? new ShowDialogAction(a.Message)
                 : Missing(errors, source, actionContext, "message"),
+            SetPropertyActionDto a => MapSetProperty(a, source, actionContext, errors),
             _ => null // иерархия закрыта атрибутами, недостижимо
         };
 
@@ -345,6 +346,49 @@ public static class SchemeFileLoader
             return Missing(errors, source, context, "value или valueExpression");
 
         return new WriteTagAction(tag, dto.Value ?? 0) { ValueExpression = dto.ValueExpression };
+    }
+
+    /// <summary>C5: «задать свойство элемента». Здесь разбирается только форма
+    /// записи — значение по типу свойства и взаимоисключающие value/
+    /// valueExpression. Всё, что требует знать проект целиком (элемент с таким
+    /// именем есть, свойство есть у его вида и анимируемо, им не управляет
+    /// привязка), проверяет сборка: загрузчик видит один файл.</summary>
+    private static SchemeAction? MapSetProperty(SetPropertyActionDto dto, string source,
+        string context, List<string> errors)
+    {
+        if (string.IsNullOrWhiteSpace(dto.Element))
+            return Missing(errors, source, context, "element");
+
+        // тип значения известен по одному id: id свойств глобально уникальны
+        var def = ElementSchemas.FindAny(dto.Property);
+        if (def is null)
+        {
+            errors.Add($"{source}: {context}: нет свойства с id {dto.Property}");
+            return null;
+        }
+
+        bool hasValue = dto.Value is not null;
+        bool hasExpression = !string.IsNullOrWhiteSpace(dto.ValueExpression);
+        if (hasValue && hasExpression)
+        {
+            errors.Add($"{source}: {context}: заданы и value, и valueExpression — оставьте одно");
+            return null;
+        }
+        if (!hasValue && !hasExpression)
+            return Missing(errors, source, context, "value или valueExpression");
+
+        PropertyValue? value = null;
+        if (hasValue)
+        {
+            value = ParseValue(def, dto.Value, source, context, errors);
+            if (value is null)
+                return null;
+        }
+
+        return new SetPropertyAction(dto.Element, dto.Property, value)
+        {
+            ValueExpression = dto.ValueExpression
+        };
     }
 
     /// <summary>"{Prefix}.X" → параметрическая ссылка (концепт §4.4, §7);

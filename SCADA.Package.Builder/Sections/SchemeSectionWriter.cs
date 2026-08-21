@@ -236,6 +236,17 @@ public static class SchemeSectionWriter
                 case ShowDialogAction a:
                     block.Write(a.Message);
                     break;
+                case SetPropertyAction a:
+                    // C5: имя цели, а не ссылка — разрешается при загрузке
+                    // в границах своей схемы (внутри шаблона — экземпляра)
+                    block.Write(a.ElementName);
+                    block.Write(a.PropertyId);
+                    block.Write(a.Value.HasValue);
+                    if (a.Value.HasValue)
+                        WritePropertyValue(block, a.Value.Value);
+                    block.Write(a.CompiledValueIndex ?? -1);
+                    WriteTagIndices(block, a.CompiledValueTagIndices);
+                    break;
                 default:
                     throw new InvalidOperationException(
                         $"Неизвестный тип действия {action.GetType().Name}");

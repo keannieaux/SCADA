@@ -72,9 +72,14 @@ public class ActionCatalogTests
     [Fact]
     public void IsKnown_CoversExactlyRegisteredCodes()
     {
-        Assert.True(ActionCatalog.IsKnown(0));
-        Assert.True(ActionCatalog.IsKnown(6));
-        Assert.False(ActionCatalog.IsKnown(7));
+        // конкретные коды не зашиваем: каталог растёт, а проверяем мы то,
+        // что IsKnown отвечает ровно по нему — иначе тест ломается на каждом
+        // новом действии, ничего при этом не поймав
+        foreach (var def in ActionCatalog.Actions)
+            Assert.True(ActionCatalog.IsKnown(def.TypeCode));
+
+        byte free = (byte)(ActionCatalog.Actions.Max(d => d.TypeCode) + 1);
+        Assert.False(ActionCatalog.IsKnown(free));
         Assert.False(ActionCatalog.IsKnown(255));
     }
 

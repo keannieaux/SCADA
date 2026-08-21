@@ -50,17 +50,30 @@ public static class SchemeLoader
 
         foreach(var binding in element.Bindings)
         {
-            if(binding.CompiledExpressionIndex is not { } index)
-                throw new InvalidOperationException(
-                    $"привязка свойства {binding.PropertyId} элемента '{element.Name}' " +
-                    "не скомпилирована: пакет собран неверно");
-
             var def=ElementSchemas.Find(element.Kind, binding.PropertyId)
                 ?? throw new InvalidOperationException(
                     $"свойство {binding.PropertyId} не найдено у вида {element.Kind} (элемент '{element.Name}')");
 
-            bindings.Add(new CompiledBinding(binding.PropertyId, def.Type,
-                pool.ToExpression(index), binding.Mapping, binding.Stops, binding.Volatile));
+            if(binding.CompiledExpressionIndex is { } index)
+            {
+                bindings.Add(new CompiledBinding(binding.PropertyId, def.Type,
+                    pool.ToExpression(index), binding.Mapping, binding.Stops, binding.Volatile));
+            }
+            // прямая строковая привязка (концепт §4.6): выражение — это ровно имя
+            // строкового тега, сборщик его не компилирует, а кладёт один индекс.
+            // Строки в ВМ не участвуют, читаются напрямую
+            else if(binding.CompiledTagIndices is [int stringTag])
+            {
+                bindings.Add(new CompiledBinding(binding.PropertyId, def.Type, null,
+                    binding.Mapping, binding.Stops, binding.Volatile, new TagId(stringTag)));
+            }
+            else
+            {
+                throw new InvalidOperationException(
+                    $"привязка свойства {binding.PropertyId} элемента '{element.Name}' " +
+                    "не скомпилирована: пакет собран неверно");
+            }
+
 
             foreach(int tagIndex in binding.CompiledTagIndices ?? [])
                 allTagIndices.Add(tagIndex);

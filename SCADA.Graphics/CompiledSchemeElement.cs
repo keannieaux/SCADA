@@ -8,10 +8,11 @@ namespace SCADA.Graphics;
 public sealed record CompiledBinding(
     int PropertyId,
     PropertyType Type,
-    Expression Expression,
+    Expression? Expression,
     StopMapping Mapping,
     IReadOnlyList<Stop>? Stops,
-    bool Volatile);
+    bool Volatile,
+    TagId? StringTag=null);
 
 public sealed record CompiledSchemeElement(
     SchemeElement Source,

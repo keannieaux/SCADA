@@ -315,7 +315,7 @@ public sealed class SchemeCanvas : Control
     {
         var evalContext=new EvaluationContext{Tags=_runtimeClient, NowUnixMs=DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()};
         foreach(var element in _runtime)
-            Recompute(element,evalContext);
+            Recompute(element,evalContext,_runtimeClient);
     }
 
     private static bool IsDirty(CompiledSchemeElement element, bool[] changedSet)
@@ -328,14 +328,24 @@ public sealed class SchemeCanvas : Control
     }
 
     // public: пересчёт одного элемента доступен headless-замерам (бенчмарки)
-    public static void Recompute(SchemeElementRuntime element, EvaluationContext context)
+    public static void Recompute(SchemeElementRuntime element, EvaluationContext context,
+        IRuntimeClient? strings=null)
     {
         var bindings=element.Compiled.Bindings;
         for(int i = 0; i < bindings.Count; i++)
         {
             var binding=bindings[i];
-            double raw=ExpressionVM.Evaluate(binding.Expression, context);
+
+            if(binding.StringTag is { } stringTag)
+            {
+                element.Set(binding.PropertyId,
+                    PropertyValue.FromString(strings?.ReadString(stringTag).Text ?? ""));
+                continue;
+            }
+
+            double raw=ExpressionVM.Evaluate(binding.Expression!, context);
             element.Set(binding.PropertyId,MapValue(binding,raw,element));
+
         }
 
         bool qualityBad=false;
@@ -493,6 +503,7 @@ public sealed class SchemeCanvas : Control
                 HasFillLevel: element.Compiled.HasFillBinding,
                 FillLevel: element.Get(SchemeProperty.FillLevel).Number,
                 Text: element.Get(SchemeProperty.Text).Text ?? "",
+                Tint: ToSkColor(element.Get(SchemeProperty.TintColor)),
                 Symbol: element.Compiled.Symbol));
         }
     }

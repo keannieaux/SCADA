@@ -19,6 +19,7 @@ public readonly record struct SchemeElementVisual(
     bool HasFillLevel,
     double FillLevel,
     string Text,
+    SKColor Tint,
     SKPicture? Symbol);
 
 public sealed class SchemeDrawOperation(Rect bounds, List<SchemeElementVisual> items, double panX, double panY, double zoom, ConcurrentStack<List<SchemeElementVisual>> pool, SKPicture? staticPicture) : ICustomDrawOperation
@@ -31,7 +32,21 @@ public sealed class SchemeDrawOperation(Rect bounds, List<SchemeElementVisual> i
     private static readonly SKPaint s_badgePaint=new(){Color=ThemeColors.Resolve("WarnColor", new SKColor(0xE8,0xA3,0x3D)), IsAntialias=true};
     private static readonly SKPaint s_textPaint=new(){Color=ThemeColors.Resolve("TextColor", new SKColor(0xE7,0xE9,0xEA)), IsAntialias=true};
     private static readonly Dictionary<SKColor, SKPaint> s_fillPaints=new();
+    private static readonly Dictionary<SKColor,SKPaint> s_tintPaints=new();
 
+    private static SKPaint? GetTintPaint(SKColor tint)
+    {
+        if(tint.Alpha==0)
+            return null;
+
+        if(!s_tintPaints.TryGetValue(tint,out var paint))
+        {
+            paint=new SKPaint{ColorFilter=SKColorFilter.CreateBlendMode(tint, SKBlendMode.SrcIn)};
+            s_tintPaints[tint]=paint;
+        }
+
+        return paint;
+    }
     private static SKPaint GetFillPaint(SKColor color)
     {
         if(!s_fillPaints.TryGetValue(color,out var paint))
@@ -91,7 +106,7 @@ public sealed class SchemeDrawOperation(Rect bounds, List<SchemeElementVisual> i
                 canvas.Save();
                 canvas.Translate(rect.Left, rect.Top);
                 canvas.Scale(scaleX,scaleY);
-                canvas.DrawPicture(picture);
+                canvas.DrawPicture(picture, GetTintPaint(item.Tint));
                 canvas.Restore();
             }
             else

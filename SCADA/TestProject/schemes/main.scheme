@@ -119,7 +119,16 @@
         { "id": 30, "value": "pump.svg" }
       ],
       "bindings": [
-        { "property": 2, "expression": "Pressure*36" }
+        { "property": 2, "expression": "Pressure*36" },
+        {
+          "property": 13,
+          "expression": "PumpCmd",
+          "mapping": "Discrete",
+          "stops": [
+            { "input": 0, "output": "#FF9BA1A5" },
+            { "input": 0.5, "output": "#FF3DD68C" }
+          ]
+        }
       ]
     },
     {

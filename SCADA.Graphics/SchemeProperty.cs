@@ -11,6 +11,7 @@ public static class SchemeProperty
     public const int TextFormat=8;
     public const int Units=9;
     public const int FillColor=10;
+    public const int TintColor=13;
     public const int FillLevel=14;
     public const int SymbolName=30;
     public const int Background=100;

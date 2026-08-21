@@ -1,6 +1,7 @@
 using SCADA.Core.Schemes;
 using SCADA.Core.Tags;
 using SCADA.Expressions;
+using SkiaSharp;
 
 namespace SCADA.Graphics;
 
@@ -18,4 +19,5 @@ public sealed record CompiledSchemeElement(
     int[] AllTagIndices,
     bool HasFillBinding,
     bool HasVolatileBindings,
+    SKPicture? Symbol,
     IReadOnlyList<CompiledSchemeAction>? OnClick);

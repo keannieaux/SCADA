@@ -19,7 +19,7 @@ public readonly record struct SchemeElementVisual(
     bool HasFillLevel,
     double FillLevel,
     string Text,
-    string? SymbolPath);
+    SKPicture? Symbol);
 
 public sealed class SchemeDrawOperation(Rect bounds, List<SchemeElementVisual> items, double panX, double panY, double zoom, ConcurrentStack<List<SchemeElementVisual>> pool, SKPicture? staticPicture) : ICustomDrawOperation
 
@@ -82,9 +82,8 @@ public sealed class SchemeDrawOperation(Rect bounds, List<SchemeElementVisual> i
                 var fillRect=new SKRect(rect.Left, rect.Bottom-fillHeight,rect.Right,rect.Bottom);
                 canvas.DrawRect(fillRect,GetFillPaint(item.Fill));
             }
-            else if(item.Kind==ElementKind.Symbol && item.SymbolPath is {} path)
+            else if(item.Kind==ElementKind.Symbol && item.Symbol is {} picture)
             {
-                var picture=SymbolCache.Load(path);
                 var sourceRect=picture.CullRect;
                 float scaleX=sourceRect.Width>0 ? rect.Width/sourceRect.Width : 1;
                 float scaleY=sourceRect.Height>0 ? rect.Height/sourceRect.Height : 1;

@@ -24,3 +24,7 @@ public sealed record CompiledOpenPopupAction(string TemplateName,
 
 public sealed record CompiledShowDialogAction(string Message, string? Confirmation, Expression? Condition)
     : CompiledSchemeAction(Confirmation, Condition);
+
+/// <summary>Назад по стеку истории переходов (ActionCatalog, код 5).</summary>
+public sealed record CompiledBackAction(string? Confirmation, Expression? Condition)
+    : CompiledSchemeAction(Confirmation, Condition);

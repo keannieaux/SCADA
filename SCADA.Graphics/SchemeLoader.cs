@@ -182,6 +182,8 @@ public static class SchemeLoader
                     action.Confirmation, condition),
             ShowDialogAction d=>
                 new CompiledShowDialogAction(d.Message, action.Confirmation, condition),
+            BackAction=>
+                new CompiledBackAction(action.Confirmation, condition),
             _=>null,
         };
     }
@@ -256,6 +258,8 @@ public static class SchemeLoader
                     action.Confirmation, condition),
             ShowDialogAction d=>
                 new CompiledShowDialogAction(d.Message, action.Confirmation, condition),
+            BackAction=>
+                new CompiledBackAction(action.Confirmation, condition),
             _=>null,
         };
     }

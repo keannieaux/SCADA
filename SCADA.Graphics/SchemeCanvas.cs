@@ -39,6 +39,8 @@ public sealed class SchemeCanvas : Control
     private readonly IImmutableBrush _background;
     private readonly SchemeViewport _viewport;
     private bool _viewInitialised;
+    private DispatcherTimer? _tickTimer;
+    private DispatcherTimer? _blinkTimer;
 
 
     public SchemeCanvas(Scheme scheme, IReadOnlyList<CompiledSchemeElement> elements,
@@ -81,19 +83,6 @@ public sealed class SchemeCanvas : Control
             ?? throw new InvalidOperationException($"нет дескриптора свойства схемы {propertyId}");
     }
 
-
-    public void StartLive()
-    {
-        // есть volatile-привязки (анимации от времени) — тик на частоте кадров
-        // ТЗ §4.1 (30 FPS); статичная схема пересчитывается раз в 200 мс (§9.2)
-        var timer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(_anyVolatile ? 33 : 200)};
-        timer.Tick+=(_,_)=>Tick();
-        timer.Start();
-
-        var blinkTimer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(500)};
-        blinkTimer.Tick+=(_,_)=>BlinkTick();
-        blinkTimer.Start();
-    }
 
     private void BlinkTick()
     {
@@ -173,6 +162,8 @@ public sealed class SchemeCanvas : Control
         }
     }
 
+    public event Action<string>? OpenSchemeRequested;
+    public event Action? BackRequested;
     private async Task HandleClick(Point screenPoint)
     {
         var (schemeX,schemeY)=_viewport.ToContent(screenPoint.X,screenPoint.Y);
@@ -263,9 +254,15 @@ public sealed class SchemeCanvas : Control
                     await SchemeDialogs.ShowMessage(owner, dialog.Message);
                     break;
 
+                // после перехода текущая канва уничтожается — доигрывать на ней
+                // остаток цепочки бессмысленно, поэтому return, а не break
                 case CompiledOpenSchemeAction openScheme:
-                    Debug.WriteLine($"OpenScheme('{openScheme.SchemeName}') — переключение схем пока не реализовано");
-                    break;
+                    OpenSchemeRequested?.Invoke(openScheme.SchemeName);
+                    return;
+
+                case CompiledBackAction:
+                    BackRequested?.Invoke();
+                    return;
 
                 case CompiledOpenPopupAction openPopup:
                     Debug.WriteLine($"OpenPopup('{openPopup.TemplateName}') — попапы пока не реализованы");
@@ -315,6 +312,30 @@ public sealed class SchemeCanvas : Control
 
         if(dirtyCount>0)
             InvalidateVisual();
+    }
+
+    public void StartLive()
+    {
+        // есть volatile-привязки (анимации от времени) — тик на частоте кадров
+        // ТЗ §4.1 (30 FPS); статичная схема пересчитывается раз в 200 мс (§9.2)
+        _tickTimer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(_anyVolatile ? 33 : 200)};
+        _tickTimer.Tick+=(_,_)=>Tick();
+        _tickTimer.Start();
+
+        _blinkTimer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(500)};
+        _blinkTimer.Tick+=(_,_)=>BlinkTick();
+        _blinkTimer.Start();
+    }
+
+    /// <summary>Остановить таймеры. При переходе на другой экран канва
+    /// выбрасывается, но её таймеры продолжали бы тикать и держать ссылку на
+    /// рантайм — без этого каждый переход копил бы по паре таймеров.</summary>
+    public void StopLive()
+    {
+        _tickTimer?.Stop();
+        _blinkTimer?.Stop();
+        _tickTimer=null;
+        _blinkTimer=null;
     }
 
     private void RecomputeAll()

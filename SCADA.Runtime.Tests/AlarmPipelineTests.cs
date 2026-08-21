@@ -118,6 +118,48 @@ public class AlarmPipelineTests : IDisposable
     }
 
     [Fact]
+    public async Task ChangedMoreThanBuffer_StillEvaluates()
+    {
+        // Регрессия на контракт GetChangedSince: возвращается ПОЛНОЕ число
+        // изменившихся тегов, а буфер конвейера — 4096. Раньше переполнение
+        // ловилось сравнением на равенство, и при 5000 изменений цикл уходил
+        // за границу массива: поток конвейера падал, аварии переставали
+        // считаться совсем. Момент как раз тот, когда это нужнее всего —
+        // первый опрос, восстановление связи, запись рецепта.
+        var table = new TagTableImpl(6000);
+        var rule = Rule();
+        var engine = new AlarmEngine(new AlarmConfiguration { Rules = [rule] },
+            [new PreparedAlarmRule { Rule = rule, TagIndices = [0] }], table, _tagDefs);
+        var journal = new SqliteEventJournal(Path.Combine(_dir, $"{Guid.NewGuid()}.db"));
+        _journals.Add(journal);
+
+        long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        table.Write(new TagId(0), new TagValue(85, now, Quality.Good)); // за уставкой
+
+        using var pipeline = new AlarmPipeline(table, engine, journal,
+            new AlarmChangeBroadcaster(),
+            new AlarmPipelineOptions { TickIntervalMs = 20 }, new JournalOptions());
+
+        await pipeline.StartAsync(CancellationToken.None);
+
+        // первый тик: авария поднялась обычным путём (EvaluateAll на старте)
+        await WaitForAsync(() =>
+            journal.Query(new AlarmHistoryQuery(0, long.MaxValue)).Count > 0);
+
+        // а теперь массовое изменение НА ХОДУ: 5001 тег за один тик при
+        // буфере 4096 — переполнение, конвейер обязан пересчитать всё
+        // и увидеть возврат в норму
+        now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        table.Write(new TagId(0), new TagValue(10, now, Quality.Good));
+        for (int i = 1; i <= 5000; i++)
+            table.Write(new TagId(i), new TagValue(i, now, Quality.Good));
+
+        await WaitForAsync(() =>
+            journal.Query(new AlarmHistoryQuery(0, long.MaxValue)).Count > 1);
+        await pipeline.StopAsync(CancellationToken.None);
+    }
+
+    [Fact]
     public async Task Retention_OldEventsDeletedOnSchedule()
     {
         var (engine, journal, broadcaster) = CreateEngine();

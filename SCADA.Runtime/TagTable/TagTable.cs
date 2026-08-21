@@ -86,6 +86,10 @@ public sealed class TagTable : ITagTable
         }
     }
 
+    /// <summary>Контракт — в <see cref="ITagTable.GetChangedSince"/>: счётчик
+    /// растёт по всем изменившимся тегам, запись идёт только пока есть место,
+    /// поэтому результат больше длины буфера — это сигнал переполнения,
+    /// а не число элементов, по которым можно итерироваться.</summary>
     public int GetChangedSince(long epoch, Span<TagId> destination)
     {
         int count = 0;

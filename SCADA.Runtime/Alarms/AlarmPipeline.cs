@@ -79,9 +79,15 @@ public sealed class AlarmPipeline : BackgroundService
 
             int changed = _tagTable.GetChangedSince(epoch, buffer);
             epoch = _tagTable.CurrentEpoch;
-            if (changed == buffer.Length)
+            if (changed >= buffer.Length)
             {
-                // буфер переполнен — часть изменений потеряна, пересчитываем всё
+                // Буфер переполнен — часть изменений в него не попала,
+                // пересчитываем всё. Сравнение именно >=: GetChangedSince
+                // возвращает ПОЛНОЕ число изменившихся тегов, а не число
+                // записанных, поэтому при переполнении оно больше длины
+                // буфера. С == цикл ниже вышел бы за массив и уронил поток
+                // конвейера — ровно в тот момент, когда изменилось всё сразу
+                // (первый опрос, восстановление связи, запись рецепта).
                 events.AddRange(_engine.EvaluateAll(now));
             }
             else

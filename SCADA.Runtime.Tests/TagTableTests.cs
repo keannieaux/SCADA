@@ -93,6 +93,27 @@ public class TagTableTests
     }
 
     [Fact]
+    public void GetChangedSince_BufferTooSmall_ReturnsFullCount_AndFillsWhatFits()
+    {
+        // контракт переполнения: возвращается число изменившихся ВСЕГО,
+        // в буфер попадает сколько влезло. По результату итерироваться
+        // нельзя — только по Math.Min(результат, длина буфера)
+        var table = new TagTable.TagTable(256);
+        long before = table.CurrentEpoch;
+
+        for (int i = 0; i < 10; i++)
+            table.Write(new TagId(i), new TagValue(i, 1, Quality.Good));
+
+        Span<TagId> small = stackalloc TagId[4];
+        int count = table.GetChangedSince(before, small);
+
+        Assert.Equal(10, count);                 // сигнал: увидел не всё
+        Assert.True(count > small.Length);
+        var written = small.ToArray().Select(t => t.Value).ToArray();
+        Assert.Equal(new[] { 0, 1, 2, 3 }, written); // заполнено до края, без мусора
+    }
+
+    [Fact]
     public void GetChangedSince_AfterCheckpoint_ReturnsNothing()
     {
         var table = new TagTable.TagTable(256);

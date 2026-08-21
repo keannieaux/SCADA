@@ -207,6 +207,25 @@ public class SessionTagTests
     }
 
     [Fact]
+    public void Epoch_BufferTooSmall_CountsBothTables()
+    {
+        // переполнение считается по обеим таблицам: иначе вызывающий решил бы,
+        // что видит всё, и сессионные изменения потерялись бы молча
+        var (router, _) = Build();
+        long start = router.CurrentEpoch;
+
+        router.Write(Shared, new TagValue(1, 0, Quality.Good));
+        router.Write(Session, new TagValue(2, 0, Quality.Good));
+        router.Write(SessionReadOnly, new TagValue(3, 0, Quality.Good));
+
+        var tiny = new TagId[1];
+        int count = router.GetChangedSince(start, tiny);
+
+        Assert.Equal(3, count);          // полный счёт по обеим таблицам
+        Assert.Equal(Shared, tiny[0]);   // в буфер попало только то, что влезло
+    }
+
+    [Fact]
     public void SessionTable_IsDenselyNumbered()
     {
         // сессионных тегов десятки: держать под них массив на весь диапазон

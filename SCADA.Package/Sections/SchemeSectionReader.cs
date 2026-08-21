@@ -296,15 +296,15 @@ public static class SchemeSectionReader
             case 2:
             {
                 string name = reader.ReadString();
-                var (source, compiled) = ReadActionParameters(reader);
-                action = new OpenSchemeAction(name, source) { CompiledParameters = compiled };
+                action = new OpenSchemeAction(name)
+                    { CompiledParameters = ReadActionParameters(reader) };
                 break;
             }
             case 3:
             {
                 string name = reader.ReadString();
-                var (source, compiled) = ReadActionParameters(reader);
-                action = new OpenPopupAction(name, source) { CompiledParameters = compiled };
+                action = new OpenPopupAction(name)
+                    { CompiledParameters = ReadActionParameters(reader) };
                 break;
             }
             case 4:
@@ -354,37 +354,49 @@ public static class SchemeSectionReader
         return indices;
     }
 
-    /// <summary>C2: параметры навигации (OpenScheme/OpenPopup) — зеркалит
-    /// WriteActionParameters. Возвращает исходный словарь (для round-trip и
-    /// редактора) и скомпилированную форму (вид значения, тег, индексы пула).</summary>
-    private static (Dictionary<string, string>? Source, List<CompiledActionParameter>? Compiled)
-        ReadActionParameters(BinaryReader reader)
+    /// <summary>
+    /// C2: параметры навигации (OpenScheme/OpenPopup) — зеркалит
+    /// WriteActionParameters. Возвращается только исполнительная форма:
+    /// исходных строк шаблонов в пакете нет (§11), поэтому словарь Parameters
+    /// модели при чтении из пакета остаётся пустым — восстанавливать его
+    /// наполовину (только константы) значило бы отдавать вводящую в
+    /// заблуждение конфигурацию.
+    /// </summary>
+    private static List<CompiledActionParameter>? ReadActionParameters(BinaryReader reader)
     {
         int count = reader.ReadInt32();
         if (count < 0)
-            return (null, null);
+            return null;
 
-        var source = new Dictionary<string, string>(count);
         var compiled = new List<CompiledActionParameter>(count);
         for (int i = 0; i < count; i++)
         {
             string name = reader.ReadString();
-            string sourceValue = reader.ReadString();
             var kind = (ActionParamValueKind)reader.ReadByte();
-            int tagId = reader.ReadInt32();
-            int[]? expressionIndices = ReadTagIndices(reader);
 
-            source[name] = sourceValue;
-            compiled.Add(new CompiledActionParameter
+            var parameter = new CompiledActionParameter { Name = name, Kind = kind };
+            switch (kind)
             {
-                Name = name,
-                SourceValue = sourceValue,
-                Kind = kind,
-                TagId = tagId,
-                ExpressionIndices = expressionIndices
-            });
+                case ActionParamValueKind.StringTagRef:
+                    parameter.TagId = reader.ReadInt32();
+                    break;
+
+                case ActionParamValueKind.Template:
+                    int literalCount = reader.ReadInt32();
+                    var literals = new string[literalCount];
+                    for (int j = 0; j < literalCount; j++)
+                        literals[j] = reader.ReadString();
+                    parameter.Literals = literals;
+                    parameter.ExpressionIndices = ReadTagIndices(reader);
+                    break;
+
+                default:
+                    parameter.Text = reader.ReadString();
+                    break;
+            }
+            compiled.Add(parameter);
         }
-        return (source, compiled);
+        return compiled;
     }
 
     private static Dictionary<string, string>? ReadStringPairs(BinaryReader reader)

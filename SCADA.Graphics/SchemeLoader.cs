@@ -186,9 +186,10 @@ public static class SchemeLoader
         };
     }
 
-    /// <summary>C2, пакетный путь: классификация значений уже сделана сборкой,
-    /// выражения плейсхолдеров лежат в пуле. Литералы разбираются из исходной
-    /// строки шаблона — она хранится в секции рядом с индексами.</summary>
+    /// <summary>C2, пакетный путь: разбирать нечего — сборка положила в секцию
+    /// готовую исполнительную форму (вид значения, тег, литералы), а выражения
+    /// лежат в пуле. Парсер скобок здесь не нужен и не должен появляться:
+    /// он есть только в сборке, поэтому правила разбора не могут разойтись.</summary>
     private static IReadOnlyList<ResolvedActionParameter>? LoadParameters(
         List<CompiledActionParameter>? compiled, CodePool pool)
     {
@@ -203,51 +204,27 @@ public static class SchemeLoader
                 case ActionParamValueKind.StringTagRef:
                     result.Add(new ResolvedActionParameter(parameter.Name, parameter.Kind)
                     {
-                        Text = parameter.SourceValue,
                         StringTagId = new TagId(parameter.TagId)
                     });
                     break;
 
                 case ActionParamValueKind.Template:
-                    var placeholders = (parameter.ExpressionIndices ?? [])
-                        .Select(pool.ToExpression)
-                        .ToList();
                     result.Add(new ResolvedActionParameter(parameter.Name, parameter.Kind)
                     {
-                        Text = parameter.SourceValue,
-                        Literals = SplitLiterals(parameter.SourceValue),
-                        Placeholders = placeholders
+                        Literals = parameter.Literals ?? [],
+                        Placeholders = (parameter.ExpressionIndices ?? [])
+                            .Select(pool.ToExpression)
+                            .ToList()
                     });
                     break;
 
                 default:
                     result.Add(new ResolvedActionParameter(parameter.Name,
-                        ActionParamValueKind.Constant) { Text = parameter.SourceValue });
+                        ActionParamValueKind.Constant) { Text = parameter.Text });
                     break;
             }
         }
         return result;
-    }
-
-    /// <summary>Литералы шаблона между плейсхолдерами. Скобки в пакете уже
-    /// проверены сборкой, поэтому разбор здесь без диагностик.</summary>
-    private static List<string> SplitLiterals(string template)
-    {
-        var literals = new List<string>();
-        int position = 0;
-        while (true)
-        {
-            int open = template.IndexOf('{', position);
-            if (open < 0)
-                break;
-            int close = template.IndexOf('}', open + 1);
-            if (close < 0)
-                break;
-            literals.Add(template[position..open]);
-            position = close + 1;
-        }
-        literals.Add(template[position..]);
-        return literals;
     }
 
     private static CompiledSchemeAction? CompileAction(SchemeAction action, ITagCatalog catalog)
@@ -283,12 +260,16 @@ public static class SchemeLoader
         };
     }
 
-    /// <summary>C2: разрешение значений составных параметров навигации.
-    /// Из пакета приходит готовая классификация (CompiledParameters): вид и
-    /// TagId строкового тега заполнены сборкой — доверяем ей. Без неё
-    /// (исходные схемы вне сборки, демо) классифицируем по скобкам:
-    /// ссылку на строковый тег без сборки не отличить от константы
-    /// (ITagCatalog типов не знает) — это удел пакетного пути.</summary>
+    /// <summary>C2: разрешение значений составных параметров навигации
+    /// на исходном пути (схема не из пакета: редактор, демо).
+    ///
+    /// Текст значений здесь берётся только из словаря Parameters — в
+    /// исполнительной форме его нет (§11: в пакете байткод и индексы,
+    /// не текст выражений). От готовой классификации, если она есть,
+    /// нужен единственный факт: ссылка на строковый тег — её без сборки
+    /// не отличить от константы, ITagCatalog типов не знает. Остальное
+    /// разбирается по скобкам, потому что выражения тут компилируются
+    /// из текста в любом случае.</summary>
     private static IReadOnlyList<ResolvedActionParameter>? ResolveParameters(
         IReadOnlyDictionary<string, string>? source,
         List<CompiledActionParameter>? compiled,
@@ -297,8 +278,9 @@ public static class SchemeLoader
         if (compiled is { Count: > 0 })
             return compiled.Select(p => p.Kind == ActionParamValueKind.StringTagRef
                     ? new ResolvedActionParameter(p.Name, p.Kind)
-                        { Text = p.SourceValue, StringTagId = new TagId(p.TagId) }
-                    : ResolveSource(p.Name, p.SourceValue, catalog))
+                        { StringTagId = new TagId(p.TagId) }
+                    : ResolveSource(p.Name,
+                        source?.GetValueOrDefault(p.Name) ?? p.Text, catalog))
                 .ToList();
 
         if (source is { Count: > 0 })

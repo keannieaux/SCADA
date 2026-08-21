@@ -16,31 +16,48 @@ public enum ActionParamValueKind : byte
     /// сессионный строковый тег.</summary>
     StringTagRef = 1,
 
-    /// <summary>Строковый шаблон с плейсхолдерами "{выражение}": Text —
-    /// исходный текст, ExpressionIndices — индексы скомпилированных числовых
-    /// выражений в пуле code.bin по порядку плейсхолдеров. Покрывает
-    /// регулярную нумерацию: "Pump{N}", "Насосная{Station}.Pump{N}".</summary>
+    /// <summary>Строковый шаблон "Pump{N}": Literals — куски между
+    /// плейсхолдерами, ExpressionIndices — индексы скомпилированных числовых
+    /// выражений в пуле code.bin по порядку. Покрывает регулярную нумерацию
+    /// ("Насосная{Station}.Pump{N}").</summary>
     Template = 2
 }
 
 /// <summary>
-/// Один параметр экземпляра шаблона/экрана после сборки. Исходная строка
-/// сохраняется в <see cref="SourceValue"/> для round-trip и диагностик.
+/// Один параметр экземпляра шаблона/экрана после сборки.
+///
+/// Хранится ровно то, что нужно для исполнения, и по видам значения:
+/// константе — текст, ссылке — идентификатор тега, шаблону — литералы
+/// и индексы выражений. Исходная строка шаблона (`"Pump{N + 1}"`) в пакет
+/// НЕ едет: внутри скобок лежал бы текст выражения, а по концепту §11
+/// в секции только байткод и индексы. Иначе об одном и том же выражении
+/// в пакете было бы две правды — текст и пул, — и разойтись они могли бы
+/// молча.
+///
+/// Второе следствие: разбор скобок остаётся только в сборке. Загрузчик берёт
+/// готовые литералы, поэтому парсер один и расходиться нечему — иначе
+/// изменение правил разбора (скажем, экранирование `{{`) в одном месте
+/// давало бы неправильно собранное имя параметра и попап, открытый
+/// на другом агрегате, без единой диагностики.
 /// </summary>
 public sealed class CompiledActionParameter
 {
     /// <summary>Ключ словаря Parameters — имя параметра шаблона.</summary>
     public required string Name { get; set; }
 
-    /// <summary>Исходная строка значения из schemes/*.scheme.</summary>
-    public required string SourceValue { get; set; }
-
     public ActionParamValueKind Kind { get; set; }
+
+    /// <summary>Для Constant — само значение; иначе пусто.</summary>
+    public string Text { get; set; } = "";
 
     /// <summary>Для StringTagRef — TagId строкового тега; иначе -1.</summary>
     public int TagId { get; set; } = -1;
 
+    /// <summary>Для Template — куски текста между плейсхолдерами;
+    /// Literals.Count == ExpressionIndices.Length + 1. Иначе null.</summary>
+    public string[]? Literals { get; set; }
+
     /// <summary>Для Template — индексы выражений пула code.bin по порядку
-    /// плейсхолдеров в <see cref="SourceValue"/>; иначе null.</summary>
+    /// плейсхолдеров; иначе null.</summary>
     public int[]? ExpressionIndices { get; set; }
 }

@@ -102,7 +102,7 @@ public class ActionParameterTextTests
             [
                 new CompiledActionParameter
                 {
-                    Name = "Selected", SourceValue = "Session.SelectedPump",
+                    Name = "Selected",
                     Kind = ActionParamValueKind.StringTagRef, TagId = 42
                 }
             ]

@@ -283,10 +283,18 @@ public static class SchemeSectionWriter
             }
     }
 
-    /// <summary>C2: составные параметры навигации — скомпилированная форма
-    /// (вид значения, ссылка на строковый тег, индексы выражений шаблона)
-    /// + исходная строка для round-trip. Без скомпилированной формы
-    /// (загрузка вне сборки) все значения пишутся константами.</summary>
+    /// <summary>
+    /// C2: составные параметры навигации в исполнительной форме — по каждому
+    /// виду значения пишется только то, что нужно рантайму: константе текст,
+    /// ссылке идентификатор тега, шаблону литералы и индексы выражений пула.
+    ///
+    /// Исходная строка шаблона в секцию не идёт: внутри скобок был бы текст
+    /// выражения, а по §11 в пакете только байткод и индексы. Литералы
+    /// разбирает сборка — единственный парсер скобок в системе.
+    ///
+    /// Без скомпилированной формы (загрузка вне сборки) значения пишутся
+    /// константами.
+    /// </summary>
     private static void WriteActionParameters(BinaryWriter writer,
         IReadOnlyDictionary<string, string>? source,
         List<CompiledActionParameter>? compiled)
@@ -294,7 +302,7 @@ public static class SchemeSectionWriter
         var list = compiled ?? source?
             .Select(kv => new CompiledActionParameter
             {
-                Name = kv.Key, SourceValue = kv.Value, Kind = ActionParamValueKind.Constant
+                Name = kv.Key, Kind = ActionParamValueKind.Constant, Text = kv.Value
             })
             .ToList();
 
@@ -304,10 +312,26 @@ public static class SchemeSectionWriter
         foreach (var parameter in list)
         {
             writer.Write(parameter.Name);
-            writer.Write(parameter.SourceValue);
             writer.Write((byte)parameter.Kind);
-            writer.Write(parameter.TagId);
-            WriteTagIndices(writer, parameter.ExpressionIndices);
+
+            switch (parameter.Kind)
+            {
+                case ActionParamValueKind.StringTagRef:
+                    writer.Write(parameter.TagId);
+                    break;
+
+                case ActionParamValueKind.Template:
+                    var literals = parameter.Literals ?? [];
+                    writer.Write(literals.Length);
+                    foreach (string literal in literals)
+                        writer.Write(literal);
+                    WriteTagIndices(writer, parameter.ExpressionIndices);
+                    break;
+
+                default:
+                    writer.Write(parameter.Text);
+                    break;
+            }
         }
     }
 

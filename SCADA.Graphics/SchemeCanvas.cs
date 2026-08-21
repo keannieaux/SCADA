@@ -25,13 +25,8 @@ public sealed class SchemeCanvas : Control
     private readonly TagId[] _changedBuffer;
     private readonly bool[] _changedSet;
     private bool _blinkPhase;
-    private double _panX;
-    private double _panY;
-    private double _zoom=1;
     private bool _isDragging;
     private Point _dragStart;
-    private double _dragStartPanX;
-    private double _dragStartPanY;
     private Point _pointerDownPosition;
     private bool _pointerMoved;
 
@@ -42,6 +37,8 @@ public sealed class SchemeCanvas : Control
     private readonly SchemeElementRuntime[] _static;
     private SKPicture? _staticPicture;
     private readonly IImmutableBrush _background;
+    private readonly SchemeViewport _viewport;
+    private bool _viewInitialised;
 
 
     public SchemeCanvas(Scheme scheme, IReadOnlyList<CompiledSchemeElement> elements,
@@ -49,7 +46,13 @@ public sealed class SchemeCanvas : Control
     {
         _background=new ImmutableSolidColorBrush(
             Color.FromUInt32(SchemeValue(scheme, SchemeProperty.Background).Color));
-        _zoom=SchemeValue(scheme, SchemeProperty.StartZoom).Number;
+        _viewport=new SchemeViewport(
+            SchemeValue(scheme,SchemeProperty.DesignWidth).Number,
+            SchemeValue(scheme,SchemeProperty.DesignHeight).Number,
+            SchemeValue(scheme,SchemeProperty.AllowPanZoom).AsBool,
+            SchemeValue(scheme,SchemeProperty.MaxZoom).Number,
+            SchemeValue(scheme,SchemeProperty.StartZoom).Number
+        );
 
         _runtime=elements.Select(e=>new SchemeElementRuntime(e)).ToArray();
 
@@ -112,13 +115,11 @@ public sealed class SchemeCanvas : Control
     {
         base.OnPointerWheelChanged(e);
 
-        var pointer=e.GetPosition(this);
-        double oldZoom=_zoom;
-        double newZoom=Math.Clamp(_zoom*(e.Delta.Y>0 ? 1.1 : 1/1.1), 0.1, 10);
+        if(!_viewport.CanZoom)
+            return;
 
-        _panX=pointer.X-(pointer.X-_panX)*(newZoom/oldZoom);
-        _panY=pointer.Y-(pointer.Y-_panY)*(newZoom/oldZoom);
-        _zoom=newZoom;
+        var pointer=e.GetPosition(this);
+        _viewport.ZoomAt(pointer.X,pointer.Y,e.Delta.Y>0?1.1:1/1.1);
 
         InvalidateVisual();
         e.Handled=true;
@@ -132,8 +133,6 @@ public sealed class SchemeCanvas : Control
         {
             _isDragging=true;
             _dragStart=e.GetPosition(this);
-            _dragStartPanX=_panX;
-            _dragStartPanY=_panY;
             _pointerDownPosition=_dragStart;
             _pointerMoved=false;
 
@@ -155,8 +154,8 @@ public sealed class SchemeCanvas : Control
         if (moveDx*moveDx+moveDy*moveDy>16)
             _pointerMoved=true;
 
-        _panX=_dragStartPanX+(current.X-_dragStart.X);
-        _panY=_dragStartPanY+(current.Y-_dragStart.Y);
+        _viewport.PanBy(current.X-_dragStart.X,current.Y-_dragStart.Y);
+        _dragStart=current;
         InvalidateVisual();
     }
 
@@ -176,9 +175,8 @@ public sealed class SchemeCanvas : Control
 
     private async Task HandleClick(Point screenPoint)
     {
-        double schemeX=(screenPoint.X-_panX)/_zoom;
-        double schemeY=(screenPoint.Y-_panY)/_zoom;
-        var point=new Point(schemeX, schemeY);
+        var (schemeX,schemeY)=_viewport.ToContent(screenPoint.X,screenPoint.Y);
+        var point=new Point(schemeX,schemeY);
 
         for (int i=_runtime.Length-1; i>=0; i--)
         {
@@ -343,7 +341,7 @@ public sealed class SchemeCanvas : Control
                 continue;
             }
 
-            double raw=ExpressionVM.Evaluate(binding.Expression!, context);
+            double raw=ExpressionVM.Evaluate(binding.Expression!.Value, context);
             element.Set(binding.PropertyId,MapValue(binding,raw,element));
 
         }
@@ -440,15 +438,29 @@ public sealed class SchemeCanvas : Control
     {
         context.FillRectangle(_background, new Rect(Bounds.Size));
 
-        _staticPicture ??= RecordStatic();
+        _viewport.Resize(Bounds.Width,Bounds.Height);
+        if (!_viewInitialised)
+        {
+            _viewport.Reset();
+            _viewInitialised=true;
+        }
+
+        _staticPicture??=RecordStatic();
 
         if(!_visualsPool.TryPop(out var visuals))
             visuals=new List<SchemeElementVisual>(_dynamic.Length);
         visuals.Clear();
-        BuildVisuals(_dynamic, _panX, _panY, _zoom, Bounds.Width, Bounds.Height,
-            _blinkPhase, visuals);
+        BuildVisuals(_dynamic,_viewport.OffsetX,_viewport.OffsetY,_viewport.Scale,
+            Bounds.Width,Bounds.Height,_blinkPhase,visuals);
 
-        context.Custom(new SchemeDrawOperation(Bounds,visuals,_panX,_panY,_zoom,_visualsPool,_staticPicture));
+        using(context.PushClip(new Rect(
+            _viewport.OffsetX,_viewport.OffsetY,
+            _viewport.DesignWidth * _viewport.Scale, _viewport.DesignHeight * _viewport.Scale)))
+        {
+            context.Custom(new SchemeDrawOperation(Bounds,visuals,
+                _viewport.OffsetX, _viewport.OffsetY,_viewport.Scale,
+                _visualsPool,_staticPicture));
+        }
     }
 
     private SKPicture RecordStatic()

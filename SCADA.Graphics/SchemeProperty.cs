@@ -15,5 +15,9 @@ public static class SchemeProperty
     public const int FillLevel=14;
     public const int SymbolName=30;
     public const int Background=100;
+    public const int DesignWidth=101;
+    public const int DesignHeight=102;
     public const int StartZoom=103;
+    public const int AllowPanZoom=104;
+    public const int MaxZoom=105;
 }

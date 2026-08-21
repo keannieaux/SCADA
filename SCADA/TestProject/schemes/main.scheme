@@ -2,6 +2,8 @@
   "name": "main",
   "properties": [
     { "id": 100, "value": "#FF222528" },
+    { "id": 101, "value": "960" },
+    { "id": 102, "value": "400" },
     { "id": 103, "value": "1" }
   ],
   "elements": [

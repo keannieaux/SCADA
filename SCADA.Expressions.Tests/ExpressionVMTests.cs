@@ -257,4 +257,16 @@ public class ExpressionVMTests
         table.Write(new TagId(0), new TagValue(100.0, 2000, Quality.Bad));
         Assert.Equal(0.0, ExpressionVM.Evaluate(expr, ContextFor(table)));
     }
+
+    [Fact]
+    public void DefaultExpression_ThrowsClearError()
+    {
+        // Expression — структура (ради нулевых аллокаций в горячем цикле),
+        // а default обходит required: без явной проверки вместо внятной
+        // ошибки был бы NullReferenceException из середины цикла ВМ
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => ExpressionVM.Evaluate(default, EmptyContext()));
+
+        Assert.Contains("не инициализировано", ex.Message);
+    }
 }

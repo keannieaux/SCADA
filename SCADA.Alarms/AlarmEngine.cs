@@ -324,7 +324,7 @@ public sealed class AlarmEngine : IAlarmEngine
         {
             // время заполняем и здесь: правила могут пользоваться now()
             // (например, «условие держится дольше смены»), семантика та же, что на схемах
-            bool cond = ExpressionVM.Evaluate(rt.Condition!,
+            bool cond = ExpressionVM.Evaluate(rt.Condition!.Value,
                 new EvaluationContext
                 {
                     Tags = _tags,

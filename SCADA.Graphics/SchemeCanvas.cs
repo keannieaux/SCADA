@@ -11,6 +11,8 @@ using System.Diagnostics;
 using Avalonia.Input;
 using System.Collections.Concurrent;
 using System.IO.Pipelines;
+using Avalonia.Media.Immutable;
+
 
 namespace SCADA.Graphics;
 
@@ -39,19 +41,43 @@ public sealed class SchemeCanvas : Control
     private readonly SchemeElementRuntime[] _dynamic;
     private readonly SchemeElementRuntime[] _static;
     private SKPicture? _staticPicture;
+    private readonly IImmutableBrush _background;
 
-    public SchemeCanvas(IReadOnlyList<CompiledSchemeElement> elements, IRuntimeClient runtimeClient, int tagCount)
+
+    public SchemeCanvas(Scheme scheme, IReadOnlyList<CompiledSchemeElement> elements,
+        IRuntimeClient runtimeClient, int tagCount)
     {
+        _background=new ImmutableSolidColorBrush(
+            Color.FromUInt32(SchemeValue(scheme, SchemeProperty.Background).Color));
+        _zoom=SchemeValue(scheme, SchemeProperty.StartZoom).Number;
+
         _runtime=elements.Select(e=>new SchemeElementRuntime(e)).ToArray();
+
         _anyVolatile=elements.Any(e=>e.HasVolatileBindings);
-        _dynamic=_runtime.Where(e=>e.Compiled.Bindings.Count>0).ToArray();
-        _static=_runtime.Where(e=>e.Compiled.Bindings.Count==0).ToArray();
+        int staticCount=0;
+        while(staticCount<_runtime.Length && _runtime[staticCount].Compiled.Bindings.Count==0)
+            staticCount++;
+
+        _static=_runtime[..staticCount];
+        _dynamic=_runtime[staticCount..];
         _runtimeClient=runtimeClient;
         _changedBuffer=new TagId[tagCount];
         _changedSet=new bool[tagCount];
 
         RecomputeAll();
     }
+
+        // значение свойства уровня схемы: заданное в файле или умолчание реестра
+    private static PropertyValue SchemeValue(Scheme scheme, int propertyId)
+    {
+        foreach(var property in scheme.Properties)
+            if(property.PropertyId==propertyId)
+                return property.Value;
+
+        return ElementSchemas.FindSchemeProperty(propertyId)?.Default
+            ?? throw new InvalidOperationException($"нет дескриптора свойства схемы {propertyId}");
+    }
+
 
     public void StartLive()
     {
@@ -164,7 +190,7 @@ public sealed class SchemeCanvas : Control
             double offsetX=runtime.Get(SchemeProperty.PositionOffsetX).Number;
             double offsetY=runtime.Get(SchemeProperty.PositionOffsetY).Number;
             var bounds=new Rect(source.X+offsetX, source.Y+offsetY, source.Width, source.Height);
-            double rotation=runtime.Get(SchemeProperty.Rotation).Number;
+            double rotation=runtime.Get(SchemeProperty.RotationDegrees).Number;
 
             if (HitTestShape(source.Kind, bounds, rotation, point))
             {
@@ -202,7 +228,7 @@ public sealed class SchemeCanvas : Control
 
         foreach (var action in actions)
         {
-            if (action.Condition is { } condition && ExpressionVM.Evaluate(condition.ToExpression(), context)==0)
+            if (action.Condition is { } condition && ExpressionVM.Evaluate(condition, context)==0)
                 continue;
 
             if (action.Confirmation is { } message && owner is not null)
@@ -289,7 +315,7 @@ public sealed class SchemeCanvas : Control
     {
         var evalContext=new EvaluationContext{Tags=_runtimeClient, NowUnixMs=DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()};
         foreach(var element in _runtime)
-            Recompute(element,evalContext);
+            Recompute(element,evalContext,_runtimeClient);
     }
 
     private static bool IsDirty(CompiledSchemeElement element, bool[] changedSet)
@@ -302,14 +328,24 @@ public sealed class SchemeCanvas : Control
     }
 
     // public: пересчёт одного элемента доступен headless-замерам (бенчмарки)
-    public static void Recompute(SchemeElementRuntime element, EvaluationContext context)
+    public static void Recompute(SchemeElementRuntime element, EvaluationContext context,
+        IRuntimeClient? strings=null)
     {
         var bindings=element.Compiled.Bindings;
         for(int i = 0; i < bindings.Count; i++)
         {
             var binding=bindings[i];
-            double raw=ExpressionVM.Evaluate(binding.Expression, context);
+
+            if(binding.StringTag is { } stringTag)
+            {
+                element.Set(binding.PropertyId,
+                    PropertyValue.FromString(strings?.ReadString(stringTag).Text ?? ""));
+                continue;
+            }
+
+            double raw=ExpressionVM.Evaluate(binding.Expression!, context);
             element.Set(binding.PropertyId,MapValue(binding,raw,element));
+
         }
 
         bool qualityBad=false;
@@ -402,7 +438,9 @@ public sealed class SchemeCanvas : Control
 
     public override void Render(DrawingContext context)
     {
-        _staticPicture??=RecordStatic();
+        context.FillRectangle(_background, new Rect(Bounds.Size));
+
+        _staticPicture ??= RecordStatic();
 
         if(!_visualsPool.TryPop(out var visuals))
             visuals=new List<SchemeElementVisual>(_dynamic.Length);
@@ -442,7 +480,7 @@ public sealed class SchemeCanvas : Control
             var source=element.Compiled.Source;
             double offsetX=element.Get(SchemeProperty.PositionOffsetX).Number;
             double offsetY=element.Get(SchemeProperty.PositionOffsetY).Number;
-            double rotation=element.Get(SchemeProperty.Rotation).Number;
+            double rotation=element.Get(SchemeProperty.RotationDegrees).Number;
             var bounds=new Rect(source.X+offsetX,source.Y+offsetY,source.Width,source.Height);
             if (rotation != 0)
             {
@@ -456,10 +494,6 @@ public sealed class SchemeCanvas : Control
             if(!bounds.Intersects(visibleRect))
                 continue;
 
-            string? symbolPath=source.Kind==ElementKind.Symbol
-                ? ResolveSymbolPath(element.Get(SchemeProperty.SymbolName).Text)
-                : null;
-
             visuals.Add(new SchemeElementVisual(
                 Bounds: bounds,
                 Fill: ToSkColor(element.Get(SchemeProperty.FillColor)),
@@ -469,14 +503,10 @@ public sealed class SchemeCanvas : Control
                 HasFillLevel: element.Compiled.HasFillBinding,
                 FillLevel: element.Get(SchemeProperty.FillLevel).Number,
                 Text: element.Get(SchemeProperty.Text).Text ?? "",
-                SymbolPath: symbolPath));
+                Tint: ToSkColor(element.Get(SchemeProperty.TintColor)),
+                Symbol: element.Compiled.Symbol));
         }
     }
-
-    private static string? ResolveSymbolPath(string? symbolName)
-        => string.IsNullOrEmpty(symbolName)
-            ? null
-            : Path.Combine(AppContext.BaseDirectory, "Symbols", $"{symbolName}.svg");
 
     private static SKColor ToSkColor(PropertyValue value)
     {

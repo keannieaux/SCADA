@@ -24,6 +24,7 @@
     <ProjectReference Include="..\SCADA.Drivers.Simulator\SCADA.Drivers.Simulator.csproj" />
     <ProjectReference Include="..\SCADA.Expressions\SCADA.Expressions.csproj" />
     <ProjectReference Include="..\SCADA.Expressions.Compiler\SCADA.Expressions.Compiler.csproj" />
+    <ProjectReference Include="..\SCADA.Graphics\SCADA.Graphics.csproj" />
     <ProjectReference Include="..\SCADA.Historian\SCADA.Historian.csproj" />
     <ProjectReference Include="..\SCADA.Package\SCADA.Package.csproj" />
     <ProjectReference Include="..\SCADA.Package.Builder\SCADA.Package.Builder.csproj" />

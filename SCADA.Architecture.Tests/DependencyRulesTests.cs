@@ -65,6 +65,26 @@ public class DependencyRulesTests
         Assert.Empty(actual);
     }
 
+    /// <summary>Графика читает Core и рантайм-клиент, но не должна тянуть
+    /// драйверы, сборщик пакета или редактор. Ссылка на
+    /// `SCADA.Expressions.Compiler` пока законна — схема компилируется при
+    /// загрузке; после B2 выражения приедут скомпилированными из пакета,
+    /// и её стоит убрать.</summary>
+    [Fact]
+    public void Graphics_DoesNotReferenceDriversOrToolingCode()
+    {
+        var refs = GetReferencedProjectNames("SCADA.Graphics");
+        var forbidden = new[] { "SCADA.Package.Builder", "SCADA.Editor", "SCADA.App.Engineering" };
+
+        var actual = refs
+            .Where(r => forbidden.Contains(r, StringComparer.OrdinalIgnoreCase)
+                        || (r.StartsWith("SCADA.Drivers.", StringComparison.OrdinalIgnoreCase)
+                            && !r.Equals("SCADA.Drivers.Abstractions", StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+
+        Assert.Empty(actual);
+    }
+
     [Fact]
     public void Historian_DoesNotReferenceRuntime()
     {

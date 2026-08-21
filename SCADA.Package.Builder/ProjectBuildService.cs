@@ -399,7 +399,7 @@ public static class ProjectBuildService
     }
 
     /// <summary>Компиляция условий действий списка событий (уровень экрана или
-    /// элемента — общий механизм, §5.2).</summary>
+    /// элемента — общий механизм, §5.2) и выражений в параметрах действий (C2).</summary>
     private static void CompileEventConditions(IReadOnlyList<SchemeEvent> events,
         string schemeName, string context, ITagCatalog catalog,
         List<CompiledExpression> pool, List<BuildDiagnostic> diagnostics,
@@ -408,27 +408,187 @@ public static class ProjectBuildService
         foreach (var schemeEvent in events)
             foreach (var action in schemeEvent.Actions)
             {
-                if (action.Condition is null)
-                    continue;
-                try
+                if (action.Condition is not null)
                 {
-                    CompiledExpression compiled =
-                        ExpressionCompiler.Compile(action.Condition, catalog);
-                    stringGuard.CheckCompiled(compiled.TagIndices,
-                        $"scheme:{schemeName}",
-                        $"Схема '{schemeName}', {context}, условие действия", diagnostics);
-                    action.CompiledConditionIndex = pool.Count; // до дедупликации
-                    action.CompiledConditionTagIndices = compiled.TagIndices;
-                    pool.Add(compiled);
+                    try
+                    {
+                        CompiledExpression compiled =
+                            ExpressionCompiler.Compile(action.Condition, catalog);
+                        stringGuard.CheckCompiled(compiled.TagIndices,
+                            $"scheme:{schemeName}",
+                            $"Схема '{schemeName}', {context}, условие действия", diagnostics);
+                        action.CompiledConditionIndex = pool.Count; // до дедупликации
+                        action.CompiledConditionTagIndices = compiled.TagIndices;
+                        pool.Add(compiled);
+                    }
+                    catch (ExpressionCompileException ex)
+                    {
+                        diagnostics.Add(new BuildDiagnostic(BuildSeverity.Error,
+                            $"scheme:{schemeName}",
+                            $"Схема '{schemeName}', {context}, условие действия: " +
+                            $"{ex.Message}"));
+                    }
                 }
-                catch (ExpressionCompileException ex)
-                {
-                    diagnostics.Add(new BuildDiagnostic(BuildSeverity.Error,
-                        $"scheme:{schemeName}",
-                        $"Схема '{schemeName}', {context}, условие действия: " +
-                        $"{ex.Message}"));
-                }
+
+                CompileActionParameters(action, schemeName, context, catalog, pool,
+                    diagnostics, stringGuard);
             }
+    }
+
+    /// <summary>
+    /// Выражения в параметрах действий (C2): значение-выражение WriteTag и
+    /// значения составных параметров навигации (OpenScheme/OpenPopup).
+    /// Формы строковых значений (C1, решение 3): константа; точное имя
+    /// строкового тега — прямая ссылка; текст с плейсхолдерами "{выражение}" —
+    /// шаблон, выражения компилируются в общий пул и вычисляются хостом
+    /// в момент выполнения действия (ВМ остаётся числовой).
+    /// </summary>
+    private static void CompileActionParameters(SchemeAction action, string schemeName,
+        string context, ITagCatalog catalog, List<CompiledExpression> pool,
+        List<BuildDiagnostic> diagnostics, StringTagGuard stringGuard)
+    {
+        switch (action)
+        {
+            case WriteTagAction { ValueExpression: { Length: > 0 } expression } write:
+                if (TryCompileActionExpression(expression, schemeName,
+                        $"{context}, значение WriteTag", catalog, pool, diagnostics,
+                        stringGuard, out int valueIndex, out int[]? valueTagIndices))
+                {
+                    write.CompiledValueIndex = valueIndex;
+                    write.CompiledValueTagIndices = valueTagIndices;
+                }
+                break;
+
+            case OpenSchemeAction open when open.Parameters is { Count: > 0 }:
+                open.CompiledParameters = CompileStringMap(open.Parameters, schemeName,
+                    context, catalog, pool, diagnostics, stringGuard);
+                break;
+
+            case OpenPopupAction popup when popup.Parameters is { Count: > 0 }:
+                popup.CompiledParameters = CompileStringMap(popup.Parameters, schemeName,
+                    context, catalog, pool, diagnostics, stringGuard);
+                break;
+        }
+    }
+
+    /// <summary>Классификация и компиляция значений словаря Parameters.</summary>
+    private static List<CompiledActionParameter> CompileStringMap(
+        IReadOnlyDictionary<string, string> parameters, string schemeName, string context,
+        ITagCatalog catalog, List<CompiledExpression> pool,
+        List<BuildDiagnostic> diagnostics, StringTagGuard stringGuard)
+    {
+        var result = new List<CompiledActionParameter>(parameters.Count);
+        foreach (var (name, value) in parameters)
+        {
+            string where = $"Схема '{schemeName}', {context}, параметр '{name}'";
+
+            // форма 2: точное имя строкового тега — прямая ссылка
+            if (stringGuard.TryGetStringTagId(value, out int tagId))
+            {
+                result.Add(new CompiledActionParameter
+                {
+                    Name = name, SourceValue = value,
+                    Kind = ActionParamValueKind.StringTagRef, TagId = tagId
+                });
+                continue;
+            }
+
+            // форма 1: без скобок — константа
+            if (!value.Contains('{') && !value.Contains('}'))
+            {
+                result.Add(new CompiledActionParameter
+                {
+                    Name = name, SourceValue = value, Kind = ActionParamValueKind.Constant
+                });
+                continue;
+            }
+
+            // форма 3: шаблон с плейсхолдерами "{числовое выражение}"
+            result.Add(CompileParameterTemplate(name, value, where, schemeName,
+                catalog, pool, diagnostics, stringGuard));
+        }
+        return result;
+    }
+
+    /// <summary>Разбор шаблона "Pump{N}" → индексы выражений пула по порядку
+    /// плейсхолдеров. Несбалансированные/пустые скобки — ошибка сборки;
+    /// экранирования скобок нет (первая итерация, задокументировано).</summary>
+    private static CompiledActionParameter CompileParameterTemplate(string name,
+        string template, string where, string schemeName, ITagCatalog catalog,
+        List<CompiledExpression> pool, List<BuildDiagnostic> diagnostics,
+        StringTagGuard stringGuard)
+    {
+        var indices = new List<int>();
+        int position = 0;
+        while (position < template.Length)
+        {
+            int open = template.IndexOf('{', position);
+            int close = template.IndexOf('}', position);
+            if (open < 0 && close < 0)
+                break;
+            if (close >= 0 && (open < 0 || close < open))
+            {
+                diagnostics.Add(new BuildDiagnostic(BuildSeverity.Error, $"scheme:{schemeName}",
+                    $"{where}: '}}' без открывающей '{{' в шаблоне '{template}'"));
+                break;
+            }
+            int end = template.IndexOf('}', open + 1);
+            if (end < 0)
+            {
+                diagnostics.Add(new BuildDiagnostic(BuildSeverity.Error, $"scheme:{schemeName}",
+                    $"{where}: незакрытый плейсхолдер в шаблоне '{template}'"));
+                break;
+            }
+
+            string expression = template[(open + 1)..end].Trim();
+            if (expression.Length == 0)
+            {
+                diagnostics.Add(new BuildDiagnostic(BuildSeverity.Error, $"scheme:{schemeName}",
+                    $"{where}: пустой плейсхолдер в шаблоне '{template}'"));
+            }
+            else if (TryCompileActionExpression(expression, schemeName,
+                         $"{where}, плейсхолдер '{{{expression}}}'", catalog, pool,
+                         diagnostics, stringGuard, out int index, out _))
+            {
+                indices.Add(index);
+            }
+            position = end + 1;
+        }
+
+        return new CompiledActionParameter
+        {
+            Name = name, SourceValue = template,
+            Kind = ActionParamValueKind.Template,
+            ExpressionIndices = indices.Count > 0 ? [..indices] : null
+        };
+    }
+
+    /// <summary>Компиляция выражения параметра действия в пул (до дедупликации)
+    /// с проверкой строкового стража. Общая точка для значения WriteTag
+    /// и плейсхолдеров шаблонов.</summary>
+    private static bool TryCompileActionExpression(string expression, string schemeName,
+        string context, ITagCatalog catalog, List<CompiledExpression> pool,
+        List<BuildDiagnostic> diagnostics, StringTagGuard stringGuard,
+        out int index, out int[]? tagIndices)
+    {
+        try
+        {
+            CompiledExpression compiled = ExpressionCompiler.Compile(expression, catalog);
+            stringGuard.CheckCompiled(compiled.TagIndices, $"scheme:{schemeName}",
+                context, diagnostics);
+            index = pool.Count;
+            tagIndices = compiled.TagIndices;
+            pool.Add(compiled);
+            return true;
+        }
+        catch (ExpressionCompileException ex)
+        {
+            diagnostics.Add(new BuildDiagnostic(BuildSeverity.Error, $"scheme:{schemeName}",
+                $"{context}: {ex.Message}"));
+            index = -1;
+            tagIndices = null;
+            return false;
+        }
     }
 
     /// <summary>Перевод индексов выражений привязок и условий действий
@@ -453,8 +613,28 @@ public static class ProjectBuildService
     {
         foreach (var schemeEvent in events)
             foreach (var action in schemeEvent.Actions)
+            {
                 if (action.CompiledConditionIndex is int input)
                     action.CompiledConditionIndex = poolIndices[input];
+
+                // C2: значение-выражение WriteTag и плейсхолдеры шаблонов
+                // параметров навигации — в той же таблице пула
+                if (action is WriteTagAction { CompiledValueIndex: int valueInput } write)
+                    write.CompiledValueIndex = poolIndices[valueInput];
+
+                var compiledParameters = action switch
+                {
+                    OpenSchemeAction open => open.CompiledParameters,
+                    OpenPopupAction popup => popup.CompiledParameters,
+                    _ => null
+                };
+                if (compiledParameters is not null)
+                    foreach (var parameter in compiledParameters)
+                        if (parameter.ExpressionIndices is not null)
+                            for (int i = 0; i < parameter.ExpressionIndices.Length; i++)
+                                parameter.ExpressionIndices[i] =
+                                    poolIndices[parameter.ExpressionIndices[i]];
+            }
     }
 
     /// <summary>
@@ -653,31 +833,27 @@ public static class ProjectBuildService
         foreach (var schemeEvent in events)
             foreach (var action in schemeEvent.Actions)
             {
-                var tag = action switch
+                // ссылки на теги — из TagRef-параметров по каталогу (C1),
+                // а не из switch по типам действий
+                foreach (var tagRef in ActionCatalog.TagRefsOf(action))
                 {
-                    WriteTagAction a => a.Tag,
-                    ToggleTagAction a => a.Tag,
-                    _ => (SchemeTagRef?)null
-                };
-                if (tag is not { } tagRef)
-                    continue;
-
-                if (tagRef.IsParametric)
-                {
-                    string head = ParametricHead(tagRef.Name);
-                    if (templateParameters is null)
+                    if (tagRef.IsParametric)
+                    {
+                        string head = ParametricHead(tagRef.Name);
+                        if (templateParameters is null)
+                            diagnostics.Add(new BuildDiagnostic(BuildSeverity.Error, source,
+                                $"Схема '{schemeName}', {context}: параметрическая " +
+                                $"ссылка '{tagRef.Name}' вне шаблона"));
+                        else if (!templateParameters.Contains(head))
+                            diagnostics.Add(new BuildDiagnostic(BuildSeverity.Error, source,
+                                $"Шаблон '{schemeName}', {context}: параметр " +
+                                $"'{head}' не объявлен в шаблоне"));
+                    }
+                    else if (!catalog.TryGetIndex(tagRef.Name, out _))
+                    {
                         diagnostics.Add(new BuildDiagnostic(BuildSeverity.Error, source,
-                            $"Схема '{schemeName}', {context}: параметрическая " +
-                            $"ссылка '{tagRef.Name}' вне шаблона"));
-                    else if (!templateParameters.Contains(head))
-                        diagnostics.Add(new BuildDiagnostic(BuildSeverity.Error, source,
-                            $"Шаблон '{schemeName}', {context}: параметр " +
-                            $"'{head}' не объявлен в шаблоне"));
-                }
-                else if (!catalog.TryGetIndex(tagRef.Name, out _))
-                {
-                    diagnostics.Add(new BuildDiagnostic(BuildSeverity.Error, source,
-                        $"Схема '{schemeName}', {context}: тег '{tagRef.Name}' не найден"));
+                            $"Схема '{schemeName}', {context}: тег '{tagRef.Name}' не найден"));
+                    }
                 }
             }
     }
@@ -899,6 +1075,20 @@ public static class ProjectBuildService
             binding.CompiledExpressionIndex = null;
             binding.CompiledTagIndices = [tag.Id.Value];
             return true;
+        }
+
+        /// <summary>Имя — в точности имя строкового тега: прямая ссылка
+        /// (C2, значения составных параметров). Правило как у прямой строковой
+        /// привязки A7: точное совпадение имени побеждает константу.</summary>
+        public bool TryGetStringTagId(string name, out int tagId)
+        {
+            if (_byName.TryGetValue(name, out var tag) && tag.DataType == TagDataType.String)
+            {
+                tagId = tag.Id.Value;
+                return true;
+            }
+            tagId = -1;
+            return false;
         }
 
         /// <summary>Строковый тег в скомпилированном выражении — ошибка сборки.</summary>

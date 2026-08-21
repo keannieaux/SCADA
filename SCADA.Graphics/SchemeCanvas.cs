@@ -216,7 +216,11 @@ public sealed class SchemeCanvas : Control
             {
                 case CompiledWriteTagAction write:
                 {
-                    var result=await _runtimeClient.WriteTagAsync(write.TagId, write.Value, RequestedBy);
+                    // C2: значение-выражение вычисляется в момент клика
+                    double value=write.ValueExpression is { } valueExpression
+                        ? ExpressionVM.Evaluate(valueExpression.ToExpression(), context)
+                        : write.Value;
+                    var result=await _runtimeClient.WriteTagAsync(write.TagId, value, RequestedBy);
                     if (result.Status!=TagWriteStatus.Ok)
                         await ReportWriteError(owner, write.TagId, result);
                     break;
@@ -237,6 +241,10 @@ public sealed class SchemeCanvas : Control
 
                 case CompiledOpenSchemeAction openScheme:
                     Debug.WriteLine($"OpenScheme('{openScheme.SchemeName}') — переключение схем пока не реализовано");
+                    break;
+
+                case CompiledOpenPopupAction openPopup:
+                    Debug.WriteLine($"OpenPopup('{openPopup.TemplateName}') — попапы пока не реализованы");
                     break;
             }
         }

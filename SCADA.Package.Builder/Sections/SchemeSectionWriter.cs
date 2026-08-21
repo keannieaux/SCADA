@@ -207,35 +207,33 @@ public static class SchemeSectionWriter
         using var blockStream = new MemoryStream();
         using (var block = new BinaryWriter(blockStream, Encoding.UTF8, leaveOpen: true))
         {
+            // байт типа — из каталога (C1): единственный источник истины,
+            // switch ниже пишет только payload
+            block.Write(ActionCatalog.TypeCodeFor(action));
             switch (action)
             {
                 case WriteTagAction a:
-                    block.Write((byte)0);
                     WriteTagRef(block, a.Tag);
                     block.Write(a.Value);
+                    // C2: значение-выражение (индекс пула code.bin + теги)
+                    block.Write(a.CompiledValueIndex ?? -1);
+                    WriteTagIndices(block, a.CompiledValueTagIndices);
                     break;
                 case ToggleTagAction a:
-                    block.Write((byte)1);
                     WriteTagRef(block, a.Tag);
                     break;
                 case OpenSchemeAction a:
-                    block.Write((byte)2);
                     block.Write(a.SchemeName);
-                    WriteStringPairs(block, a.Parameters);
+                    WriteActionParameters(block, a.Parameters, a.CompiledParameters);
                     break;
                 case OpenPopupAction a:
-                    block.Write((byte)3);
                     block.Write(a.TemplateName);
-                    WriteStringPairs(block, a.Parameters);
+                    WriteActionParameters(block, a.Parameters, a.CompiledParameters);
                     break;
                 case ClosePopupAction:
-                    block.Write((byte)4);
-                    break;
                 case BackAction:
-                    block.Write((byte)5);
-                    break;
+                    break; // без параметров
                 case ShowDialogAction a:
-                    block.Write((byte)6);
                     block.Write(a.Message);
                     break;
                 default:
@@ -283,6 +281,34 @@ public static class SchemeSectionWriter
                 writer.Write(key);
                 writer.Write(value);
             }
+    }
+
+    /// <summary>C2: составные параметры навигации — скомпилированная форма
+    /// (вид значения, ссылка на строковый тег, индексы выражений шаблона)
+    /// + исходная строка для round-trip. Без скомпилированной формы
+    /// (загрузка вне сборки) все значения пишутся константами.</summary>
+    private static void WriteActionParameters(BinaryWriter writer,
+        IReadOnlyDictionary<string, string>? source,
+        List<CompiledActionParameter>? compiled)
+    {
+        var list = compiled ?? source?
+            .Select(kv => new CompiledActionParameter
+            {
+                Name = kv.Key, SourceValue = kv.Value, Kind = ActionParamValueKind.Constant
+            })
+            .ToList();
+
+        writer.Write(list?.Count ?? -1);
+        if (list is null)
+            return;
+        foreach (var parameter in list)
+        {
+            writer.Write(parameter.Name);
+            writer.Write(parameter.SourceValue);
+            writer.Write((byte)parameter.Kind);
+            writer.Write(parameter.TagId);
+            WriteTagIndices(writer, parameter.ExpressionIndices);
+        }
     }
 
     private static void WriteNullableString(BinaryWriter writer, string? value)

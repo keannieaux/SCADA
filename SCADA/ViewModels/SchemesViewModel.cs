@@ -160,6 +160,30 @@ public sealed class SchemesViewModel : ViewModelBase
                     },
                     new SchemeElement
                     {
+                        // C2: значение-выражение — уставка +5 в момент клика
+                        Id = Guid.NewGuid(),
+                        Kind = ElementKind.Rectangle,
+                        X = 740, Y = 240, Width = 140, Height = 40,
+                        Properties = [new ElementProperty(SchemeProperty.TextFormat, PropertyValue.FromString("F0"))],
+                        Bindings =
+                        [
+                            new ElementBinding { PropertyId = SchemeProperty.Text, Expression = "Setpoint" },
+                        ],
+                        Events =
+                        [
+                            new SchemeEvent
+                            {
+                                Kind = SchemeEventKind.Click,
+                                Actions = [new WriteTagAction(SchemeTagRef.Absolute("Setpoint"), 0)
+                                {
+                                    ValueExpression = "Setpoint + 5",
+                                    Confirmation = "Увеличить уставку на 5?"
+                                }]
+                            }
+                        ]
+                    },
+                    new SchemeElement
+                    {
                         Id = Guid.NewGuid(),
                         Kind = ElementKind.Rectangle,
                         X = 900, Y = 20, Width = 30, Height = 250,

@@ -270,23 +270,53 @@ public static class SchemeSectionReader
         long actionEnd = reader.BaseStream.Position + actionLength;
 
         byte type = reader.ReadByte();
-        if (type > 6)
+        if (!ActionCatalog.IsKnown(type))
         {
             // неизвестный тип действия (пакет новее) — пропуск по длине (§5.3)
             reader.BaseStream.Position = actionEnd;
             return null;
         }
 
-        SchemeAction action = type switch
+        SchemeAction action;
+        switch (type)
         {
-            0 => new WriteTagAction(ReadTagRef(reader), reader.ReadDouble()),
-            1 => new ToggleTagAction(ReadTagRef(reader)),
-            2 => new OpenSchemeAction(reader.ReadString(), ReadStringPairs(reader)),
-            3 => new OpenPopupAction(reader.ReadString(), ReadStringPairs(reader)),
-            4 => new ClosePopupAction(),
-            5 => new BackAction(),
-            _ => new ShowDialogAction(reader.ReadString())
-        };
+            case 0:
+            {
+                var write = new WriteTagAction(ReadTagRef(reader), reader.ReadDouble());
+                // C2: значение-выражение
+                int valueIndex = reader.ReadInt32();
+                write.CompiledValueIndex = valueIndex < 0 ? null : valueIndex;
+                write.CompiledValueTagIndices = ReadTagIndices(reader);
+                action = write;
+                break;
+            }
+            case 1:
+                action = new ToggleTagAction(ReadTagRef(reader));
+                break;
+            case 2:
+            {
+                string name = reader.ReadString();
+                var (source, compiled) = ReadActionParameters(reader);
+                action = new OpenSchemeAction(name, source) { CompiledParameters = compiled };
+                break;
+            }
+            case 3:
+            {
+                string name = reader.ReadString();
+                var (source, compiled) = ReadActionParameters(reader);
+                action = new OpenPopupAction(name, source) { CompiledParameters = compiled };
+                break;
+            }
+            case 4:
+                action = new ClosePopupAction();
+                break;
+            case 5:
+                action = new BackAction();
+                break;
+            default:
+                action = new ShowDialogAction(reader.ReadString());
+                break;
+        }
 
         int conditionIndex = reader.ReadInt32();
         action.CompiledConditionIndex = conditionIndex < 0 ? null : conditionIndex;
@@ -322,6 +352,39 @@ public static class SchemeSectionReader
         for (int i = 0; i < count; i++)
             indices[i] = reader.ReadInt32();
         return indices;
+    }
+
+    /// <summary>C2: параметры навигации (OpenScheme/OpenPopup) — зеркалит
+    /// WriteActionParameters. Возвращает исходный словарь (для round-trip и
+    /// редактора) и скомпилированную форму (вид значения, тег, индексы пула).</summary>
+    private static (Dictionary<string, string>? Source, List<CompiledActionParameter>? Compiled)
+        ReadActionParameters(BinaryReader reader)
+    {
+        int count = reader.ReadInt32();
+        if (count < 0)
+            return (null, null);
+
+        var source = new Dictionary<string, string>(count);
+        var compiled = new List<CompiledActionParameter>(count);
+        for (int i = 0; i < count; i++)
+        {
+            string name = reader.ReadString();
+            string sourceValue = reader.ReadString();
+            var kind = (ActionParamValueKind)reader.ReadByte();
+            int tagId = reader.ReadInt32();
+            int[]? expressionIndices = ReadTagIndices(reader);
+
+            source[name] = sourceValue;
+            compiled.Add(new CompiledActionParameter
+            {
+                Name = name,
+                SourceValue = sourceValue,
+                Kind = kind,
+                TagId = tagId,
+                ExpressionIndices = expressionIndices
+            });
+        }
+        return (source, compiled);
     }
 
     private static Dictionary<string, string>? ReadStringPairs(BinaryReader reader)

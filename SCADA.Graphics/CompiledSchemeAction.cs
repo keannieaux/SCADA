@@ -4,11 +4,23 @@ using SCADA.Expressions.Compiler;
 namespace SCADA.Graphics;
 
 public abstract record CompiledSchemeAction(string? Confirmation, CompiledExpression? Condition);
-public sealed record CompiledWriteTagAction(TagId TagId, double Value, string? Confirmation, CompiledExpression? Condition)
+
+/// <summary>Запись в тег. ValueExpression (C2) задано — значение вычисляется
+/// в момент выполнения, позиционный Value игнорируется ("Тег + 1" и т.п.).</summary>
+public sealed record CompiledWriteTagAction(TagId TagId, double Value,
+    CompiledExpression? ValueExpression, string? Confirmation, CompiledExpression? Condition)
     : CompiledSchemeAction(Confirmation, Condition);
+
 public sealed record CompiledToggleTagAction(TagId TagId, string? Confirmation, CompiledExpression? Condition)
-    :CompiledSchemeAction(Confirmation, Condition);
-public sealed record CompiledOpenSchemeAction(string SchemeName, string? Confirmation, CompiledExpression? Condition)
-    :CompiledSchemeAction(Confirmation, Condition);
+    : CompiledSchemeAction(Confirmation, Condition);
+
+public sealed record CompiledOpenSchemeAction(string SchemeName,
+    IReadOnlyList<ResolvedActionParameter>? Parameters, string? Confirmation, CompiledExpression? Condition)
+    : CompiledSchemeAction(Confirmation, Condition);
+
+public sealed record CompiledOpenPopupAction(string TemplateName,
+    IReadOnlyList<ResolvedActionParameter>? Parameters, string? Confirmation, CompiledExpression? Condition)
+    : CompiledSchemeAction(Confirmation, Condition);
+
 public sealed record CompiledShowDialogAction(string Message, string? Confirmation, CompiledExpression? Condition)
-    :CompiledSchemeAction(Confirmation, Condition);
+    : CompiledSchemeAction(Confirmation, Condition);

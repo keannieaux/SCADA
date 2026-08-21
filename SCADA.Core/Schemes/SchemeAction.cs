@@ -34,17 +34,36 @@ public abstract record SchemeAction
 
 /// <summary>Запись в тег. Идёт через IRuntimeClient.WriteTagsAsync —
 /// batch, аудит (ТЗ §13), подтверждения (M7). Не через системный WriteLocal.</summary>
-public sealed record WriteTagAction(SchemeTagRef Tag, double Value) : SchemeAction;
+public sealed record WriteTagAction(SchemeTagRef Tag, double Value) : SchemeAction
+{
+    /// <summary>Значение-выражение (C2): задано — вычисляется в момент
+    /// выполнения, а позиционный Value игнорируется. Оба заданы — ошибка
+    /// сборки. Покрывает Increase/Decrease/CopyTag одним типом действия:
+    /// "Тег + 1", "ДругойТег", "Уставка * 0.9".</summary>
+    public string? ValueExpression { get; init; }
+
+    // --- заполняются при сборке пакета ---
+    public int? CompiledValueIndex { get; set; }
+    public int[]? CompiledValueTagIndices { get; set; }
+}
 
 public sealed record ToggleTagAction(SchemeTagRef Tag) : SchemeAction;
 
 /// <summary>Переход на схему с опциональными параметрами (параметризованный экран).</summary>
 public sealed record OpenSchemeAction(string SchemeName,
-    IReadOnlyDictionary<string, string>? Parameters = null) : SchemeAction;
+    IReadOnlyDictionary<string, string>? Parameters = null) : SchemeAction
+{
+    /// <summary>Compiled-формы значений Parameters (C2) — заполняются при сборке.</summary>
+    public List<CompiledActionParameter>? CompiledParameters { get; set; }
+}
 
 /// <summary>Попап — внутренний модальный оверлей, не окно ОС (концепт §6).</summary>
 public sealed record OpenPopupAction(string TemplateName,
-    IReadOnlyDictionary<string, string>? Parameters = null) : SchemeAction;
+    IReadOnlyDictionary<string, string>? Parameters = null) : SchemeAction
+{
+    /// <summary>Compiled-формы значений Parameters (C2) — заполняются при сборке.</summary>
+    public List<CompiledActionParameter>? CompiledParameters { get; set; }
+}
 
 public sealed record ClosePopupAction : SchemeAction;
 

@@ -292,7 +292,8 @@ public static class SchemeFileLoader
         SchemeAction? action = dto switch
         {
             WriteTagActionDto a => ParseTagRef(a.Tag, source, actionContext, errors) is { } tag
-                ? new WriteTagAction(tag, a.Value) : null,
+                ? MapWriteTag(a, tag, source, actionContext, errors)
+                : null,
             ToggleTagActionDto a => ParseTagRef(a.Tag, source, actionContext, errors) is { } tag
                 ? new ToggleTagAction(tag) : null,
             OpenSchemeActionDto a => !string.IsNullOrWhiteSpace(a.SchemeName)
@@ -325,6 +326,25 @@ public static class SchemeFileLoader
     {
         errors.Add($"{source}: {context}: не задано поле {field}");
         return null;
+    }
+
+    /// <summary>C2: value и valueExpression взаимоисключающие; одно из двух
+    /// обязательно (иначе действие записывало бы молчаливый ноль).</summary>
+    private static SchemeAction? MapWriteTag(WriteTagActionDto dto, SchemeTagRef tag,
+        string source, string context, List<string> errors)
+    {
+        bool hasValue = dto.Value.HasValue;
+        bool hasExpression = !string.IsNullOrWhiteSpace(dto.ValueExpression);
+
+        if (hasValue && hasExpression)
+        {
+            errors.Add($"{source}: {context}: заданы и value, и valueExpression — оставьте одно");
+            return null;
+        }
+        if (!hasValue && !hasExpression)
+            return Missing(errors, source, context, "value или valueExpression");
+
+        return new WriteTagAction(tag, dto.Value ?? 0) { ValueExpression = dto.ValueExpression };
     }
 
     /// <summary>"{Prefix}.X" → параметрическая ссылка (концепт §4.4, §7);

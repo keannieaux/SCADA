@@ -775,4 +775,202 @@ public class SchemeBuildTests : IDisposable
         Assert.Contains(result.Diagnostics,
             d => d.Severity == BuildSeverity.Error && d.Message.Contains("не архивируются"));
     }
+
+    // --- C2: выражения в параметрах действий (docs/scheme-controls-plan.md) ---
+
+    [Fact]
+    public void WriteTagValueExpression_CompilesIntoPool_AndRoundTrips()
+    {
+        WriteScheme("overview.scheme", """
+            {
+              "elements": [{
+                "kind": "Rectangle", "x": 0, "y": 0, "width": 10, "height": 10,
+                "events": [{"kind": "Click", "actions": [
+                  {"type": "WriteTag", "tag": "Pump1.Running",
+                   "valueExpression": "Pump1.Running + 1"}]}]
+              }]
+            }
+            """);
+
+        var result = ProjectBuildService.Build(ProjectDir, PackagePath);
+
+        Assert.True(result.Success, string.Join("; ",
+            result.Diagnostics.Select(d => d.Message)));
+        using var reader = PackageReader.Open(PackagePath);
+        var pool = CodeSectionReader.Read(reader.ReadEntry("code.bin"));
+        Assert.Single(pool.Expressions); // только значение-выражение, условий нет
+
+        var scheme = PackageProjectLoader.Load(reader).Schemes.Single();
+        var writeTag = Assert.IsType<WriteTagAction>(
+            Assert.Single(scheme.Elements[0].Events[0].Actions));
+        Assert.NotNull(writeTag.CompiledValueIndex);
+        Assert.Equal(new[] { 1 }, writeTag.CompiledValueTagIndices); // Pump1.Running
+        // текста выражения в пакете нет, исходное Value не задано
+        Assert.Null(writeTag.ValueExpression);
+        Assert.Equal(0, writeTag.Value);
+    }
+
+    [Fact]
+    public void WriteTagValueAndExpression_Fails()
+    {
+        WriteScheme("overview.scheme", """
+            {
+              "elements": [{
+                "kind": "Rectangle", "x": 0, "y": 0, "width": 10, "height": 10,
+                "events": [{"kind": "Click", "actions": [
+                  {"type": "WriteTag", "tag": "Pump1.Running",
+                   "value": 1, "valueExpression": "Pump1.Running + 1"}]}]
+              }]
+            }
+            """);
+
+        var result = ProjectBuildService.Build(ProjectDir, PackagePath);
+
+        Assert.False(result.Success);
+        Assert.Contains(result.Diagnostics,
+            d => d.Severity == BuildSeverity.Error && d.Message.Contains("valueExpression"));
+    }
+
+    [Fact]
+    public void WriteTagWithoutValue_Fails()
+    {
+        // ни value, ни valueExpression — записывался бы молчаливый ноль
+        WriteScheme("overview.scheme", """
+            {
+              "elements": [{
+                "kind": "Rectangle", "x": 0, "y": 0, "width": 10, "height": 10,
+                "events": [{"kind": "Click", "actions": [
+                  {"type": "WriteTag", "tag": "Pump1.Running"}]}]
+              }]
+            }
+            """);
+
+        var result = ProjectBuildService.Build(ProjectDir, PackagePath);
+
+        Assert.False(result.Success);
+        Assert.Contains(result.Diagnostics,
+            d => d.Severity == BuildSeverity.Error && d.Message.Contains("value или valueExpression"));
+    }
+
+    [Fact]
+    public void WriteTagValueExpression_OnStringTag_Fails()
+    {
+        // ВМ числовая: строковый тег в значении-выражении — ошибка сборки
+        WriteDevicesWithInternal();
+        WriteTagsWithString();
+        WriteScheme("overview.scheme", """
+            {
+              "elements": [{
+                "kind": "Rectangle", "x": 0, "y": 0, "width": 10, "height": 10,
+                "events": [{"kind": "Click", "actions": [
+                  {"type": "WriteTag", "tag": "Pump1.Running",
+                   "valueExpression": "Status.Text"}]}]
+              }]
+            }
+            """);
+
+        var result = ProjectBuildService.Build(ProjectDir, PackagePath);
+
+        Assert.False(result.Success);
+        Assert.Contains(result.Diagnostics,
+            d => d.Severity == BuildSeverity.Error && d.Message.Contains("строков"));
+    }
+
+    [Fact]
+    public void OpenPopupParameters_Classified_AndRoundTrip()
+    {
+        // три формы значений (C1 решение 3): константа, ссылка на строковый
+        // тег, шаблон с числовым плейсхолдером
+        WriteDevicesWithInternal();
+        WriteTagsWithString();
+        WriteTemplate("pump.scheme", """
+            {
+              "parameters": [{"name": "Prefix", "type": "String"}],
+              "elements": []
+            }
+            """);
+        WriteScheme("overview.scheme", """
+            {
+              "elements": [{
+                "kind": "Rectangle", "x": 0, "y": 0, "width": 10, "height": 10,
+                "events": [{"kind": "Click", "actions": [
+                  {"type": "OpenPopup", "templateName": "pump",
+                   "parameters": {
+                     "Const": "Pump5",
+                     "Selected": "Status.Text",
+                     "ByNumber": "Pump{Boiler1.Temp}"}}]}]
+              }]
+            }
+            """);
+
+        var result = ProjectBuildService.Build(ProjectDir, PackagePath);
+
+        Assert.True(result.Success, string.Join("; ",
+            result.Diagnostics.Select(d => d.Message)));
+        using var reader = PackageReader.Open(PackagePath);
+        var scheme = PackageProjectLoader.Load(reader).Schemes.Single();
+        var popup = Assert.IsType<OpenPopupAction>(
+            Assert.Single(scheme.Elements[0].Events[0].Actions));
+
+        var compiled = Assert.IsType<List<CompiledActionParameter>>(popup.CompiledParameters);
+        Assert.Equal(ActionParamValueKind.Constant,
+            compiled.Single(p => p.Name == "Const").Kind);
+        var tagRef = compiled.Single(p => p.Name == "Selected");
+        Assert.Equal(ActionParamValueKind.StringTagRef, tagRef.Kind);
+        Assert.Equal(2, tagRef.TagId); // Status.Text
+        var template = compiled.Single(p => p.Name == "ByNumber");
+        Assert.Equal(ActionParamValueKind.Template, template.Kind);
+        Assert.Single(template.ExpressionIndices!); // один плейсхолдер
+
+        // round-trip: исходный словарь восстановлен из SourceValue
+        Assert.Equal("Pump5", popup.Parameters!["Const"]);
+        Assert.Equal("Status.Text", popup.Parameters["Selected"]);
+        Assert.Equal("Pump{Boiler1.Temp}", popup.Parameters["ByNumber"]);
+    }
+
+    [Fact]
+    public void OpenPopupTemplate_WithStringTagPlaceholder_Fails()
+    {
+        WriteDevicesWithInternal();
+        WriteTagsWithString();
+        WriteTemplate("pump.scheme", """{"elements": []}""");
+        WriteScheme("overview.scheme", """
+            {
+              "elements": [{
+                "kind": "Rectangle", "x": 0, "y": 0, "width": 10, "height": 10,
+                "events": [{"kind": "Click", "actions": [
+                  {"type": "OpenPopup", "templateName": "pump",
+                   "parameters": {"Prefix": "Pump{Status.Text}"}}]}]
+              }]
+            }
+            """);
+
+        var result = ProjectBuildService.Build(ProjectDir, PackagePath);
+
+        Assert.False(result.Success);
+        Assert.Contains(result.Diagnostics,
+            d => d.Severity == BuildSeverity.Error && d.Message.Contains("строков"));
+    }
+
+    [Fact]
+    public void OpenPopupTemplate_UnbalancedBraces_Fail()
+    {
+        WriteTemplate("pump.scheme", """{"elements": []}""");
+        WriteScheme("overview.scheme", """
+            {
+              "elements": [{
+                "kind": "Rectangle", "x": 0, "y": 0, "width": 10, "height": 10,
+                "events": [{"kind": "Click", "actions": [
+                  {"type": "OpenPopup", "templateName": "pump",
+                   "parameters": {"Prefix": "Pump{Boiler1.Temp"}}]}]
+              }]
+            }
+            """);
+
+        var result = ProjectBuildService.Build(ProjectDir, PackagePath);
+
+        Assert.False(result.Success);
+        Assert.Contains(result.Diagnostics,
+            d => d.Severity == BuildSeverity.Error && d.Message.Contains("незакрытый плейсхолдер"));
+    }
 }

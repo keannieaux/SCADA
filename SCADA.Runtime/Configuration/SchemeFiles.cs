@@ -130,7 +130,14 @@ public sealed class WriteTagActionDto : SchemeActionDto
 {
     /// <summary>Тег: абсолютное имя или параметрическая ссылка "{Prefix}.X".</summary>
     public string? Tag { get; set; }
-    public double Value { get; set; }
+
+    /// <summary>Значение-константа. Nullable, чтобы отличать «не задано»
+    /// от нуля: заданы и value, и valueExpression — ошибка загрузки (C2).</summary>
+    public double? Value { get; set; }
+
+    /// <summary>Значение-выражение (C2): "Тег + 1", "Уставка * 0.9".
+    /// Задано — вычисляется в момент выполнения, Value игнорируется.</summary>
+    public string? ValueExpression { get; set; }
 }
 
 public sealed class ToggleTagActionDto : SchemeActionDto

@@ -531,16 +531,41 @@ public class SchemeSectionTests
             case OpenSchemeAction e3:
                 var a3 = (OpenSchemeAction)actual;
                 Assert.Equal(e3.SchemeName, a3.SchemeName);
-                AssertStringPairs(e3.Parameters, a3.Parameters);
+                AssertParameters(e3.Parameters, a3.Parameters, a3.CompiledParameters);
                 break;
             case OpenPopupAction e4:
                 var a4 = (OpenPopupAction)actual;
                 Assert.Equal(e4.TemplateName, a4.TemplateName);
-                AssertStringPairs(e4.Parameters, a4.Parameters);
+                AssertParameters(e4.Parameters, a4.Parameters, a4.CompiledParameters);
                 break;
             case ShowDialogAction e5:
                 Assert.Equal(e5.Message, ((ShowDialogAction)actual).Message);
                 break;
+        }
+    }
+
+    /// <summary>C2: значения параметров навигации едут в секцию исполнительной
+    /// формой (§11: текста выражений в пакете нет), поэтому при чтении
+    /// восстанавливается не исходный словарь, а CompiledParameters. Здесь схема
+    /// собрана вручную, без компиляции — значения записаны константами.</summary>
+    private static void AssertParameters(IReadOnlyDictionary<string, string>? expected,
+        IReadOnlyDictionary<string, string>? actualSource,
+        List<CompiledActionParameter>? actual)
+    {
+        Assert.Null(actualSource);
+        if (expected is null || expected.Count == 0)
+        {
+            Assert.True(actual is null || actual.Count == 0);
+            return;
+        }
+
+        Assert.NotNull(actual);
+        Assert.Equal(expected.Count, actual.Count);
+        foreach (var (key, value) in expected)
+        {
+            var parameter = actual.Single(p => p.Name == key);
+            Assert.Equal(ActionParamValueKind.Constant, parameter.Kind);
+            Assert.Equal(value, parameter.Text);
         }
     }
 

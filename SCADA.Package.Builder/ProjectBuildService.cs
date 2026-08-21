@@ -487,7 +487,7 @@ public static class ProjectBuildService
             {
                 result.Add(new CompiledActionParameter
                 {
-                    Name = name, SourceValue = value,
+                    Name = name,
                     Kind = ActionParamValueKind.StringTagRef, TagId = tagId
                 });
                 continue;
@@ -498,7 +498,7 @@ public static class ProjectBuildService
             {
                 result.Add(new CompiledActionParameter
                 {
-                    Name = name, SourceValue = value, Kind = ActionParamValueKind.Constant
+                    Name = name, Kind = ActionParamValueKind.Constant, Text = value
                 });
                 continue;
             }
@@ -510,15 +510,21 @@ public static class ProjectBuildService
         return result;
     }
 
-    /// <summary>Разбор шаблона "Pump{N}" → индексы выражений пула по порядку
-    /// плейсхолдеров. Несбалансированные/пустые скобки — ошибка сборки;
-    /// экранирования скобок нет (первая итерация, задокументировано).</summary>
+    /// <summary>Разбор шаблона "Pump{N}" → литералы между плейсхолдерами
+    /// и индексы выражений пула по порядку. Несбалансированные/пустые скобки —
+    /// ошибка сборки; экранирования скобок нет (первая итерация,
+    /// задокументировано).
+    ///
+    /// Это единственное место, где разбираются скобки: в пакет уезжают
+    /// готовые литералы, поэтому загрузчику парсер не нужен и правила разбора
+    /// не могут разойтись между сборкой и рантаймом.</summary>
     private static CompiledActionParameter CompileParameterTemplate(string name,
         string template, string where, string schemeName, ITagCatalog catalog,
         List<CompiledExpression> pool, List<BuildDiagnostic> diagnostics,
         StringTagGuard stringGuard)
     {
         var indices = new List<int>();
+        var literals = new List<string>();
         int position = 0;
         while (position < template.Length)
         {
@@ -550,15 +556,22 @@ public static class ProjectBuildService
                          $"{where}, плейсхолдер '{{{expression}}}'", catalog, pool,
                          diagnostics, stringGuard, out int index, out _))
             {
+                // литерал добавляется вместе с индексом: инвариант
+                // Literals.Count == Indices.Length + 1 не должен ломаться
+                // даже на битом шаблоне (пакет при ошибках всё равно не пишется)
+                literals.Add(template[position..open]);
                 indices.Add(index);
             }
             position = end + 1;
         }
 
+        literals.Add(template[position..]);
+
         return new CompiledActionParameter
         {
-            Name = name, SourceValue = template,
+            Name = name,
             Kind = ActionParamValueKind.Template,
+            Literals = [..literals],
             ExpressionIndices = indices.Count > 0 ? [..indices] : null
         };
     }

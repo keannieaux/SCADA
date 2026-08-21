@@ -918,14 +918,18 @@ public class SchemeBuildTests : IDisposable
         var tagRef = compiled.Single(p => p.Name == "Selected");
         Assert.Equal(ActionParamValueKind.StringTagRef, tagRef.Kind);
         Assert.Equal(2, tagRef.TagId); // Status.Text
+        Assert.Equal("Pump5", compiled.Single(p => p.Name == "Const").Text);
+
+        // шаблон приезжает разобранным: литералы вокруг плейсхолдеров и
+        // индексы выражений пула, исходной строки "Pump{Boiler1.Temp}" нет
         var template = compiled.Single(p => p.Name == "ByNumber");
         Assert.Equal(ActionParamValueKind.Template, template.Kind);
         Assert.Single(template.ExpressionIndices!); // один плейсхолдер
+        Assert.Equal(["Pump", ""], template.Literals!);
 
-        // round-trip: исходный словарь восстановлен из SourceValue
-        Assert.Equal("Pump5", popup.Parameters!["Const"]);
-        Assert.Equal("Status.Text", popup.Parameters["Selected"]);
-        Assert.Equal("Pump{Boiler1.Temp}", popup.Parameters["ByNumber"]);
+        // текста выражений в пакете нет (§11), поэтому исходный словарь
+        // значений не восстанавливается — рантайму хватает CompiledParameters
+        Assert.Null(popup.Parameters);
     }
 
     [Fact]

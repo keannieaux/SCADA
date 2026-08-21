@@ -86,7 +86,20 @@ public static class ElementSchemas
         new(100, "Background", PropertyType.Color, PropertyValue.FromColor(0xFF1B1D20), false, "Экран"),
         new(101, "DesignWidth", PropertyType.Number, PropertyValue.FromNumber(1920), false, "Экран"),
         new(102, "DesignHeight", PropertyType.Number, PropertyValue.FromNumber(1080), false, "Экран"),
+        // Множитель поверх базового масштаба вписывания: 1.0 — экран открыт
+        // ровно вписанным. Значим только при разрешённых пане и зуме — иначе
+        // оператор увидел бы обрезанный экран без возможности его подвинуть.
         new(103, "StartZoom", PropertyType.Number, PropertyValue.FromNumber(1.0), false, "Экран"),
+
+        // Пан и зум по умолчанию запрещены: схема вписана целиком, двигать
+        // её незачем, а случайный сдвиг мышью уводит за край аварийный
+        // индикатор — то есть ломает гарантию «оператор видит всё».
+        // Включается осознанно: карта цеха, большой план, сенсорная панель.
+        new(104, "AllowPanZoom", PropertyType.Boolean, PropertyValue.FromBool(false), false, "Экран"),
+
+        // Предел приближения. Отдалить меньше вписанного нельзя в принципе:
+        // схема уплыла бы в угол окна, а вокруг осталась пустота.
+        new(105, "MaxZoom", PropertyType.Number, PropertyValue.FromNumber(4.0), false, "Экран"),
     ];
 
     /// <summary>Схема свойств уровня схемы/шаблона (не элементов).</summary>

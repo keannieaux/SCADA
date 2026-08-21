@@ -172,6 +172,123 @@ public static class ProjectBuildService
         }
     }
 
+
+    /// <summary>
+    /// Проектная область экрана (концепт §6.1): DesignWidth/DesignHeight —
+    /// холст, в единицах которого заданы координаты элементов. Рантайм
+    /// вписывает этот холст в окно и обрезает по его границам, поэтому
+    /// проверяем две вещи.
+    ///
+    /// Неположительный размер — ошибка: базовый масштаб считается делением
+    /// на него, и в рантайме получился бы Infinity или NaN.
+    ///
+    /// Элемент целиком за пределами холста — предупреждение: после обрезки
+    /// он просто не появится на экране. Частично выходящие не трогаем —
+    /// элемент может намеренно выезжать из-за края анимацией.
+    /// </summary>
+    private static void ValidateDesignArea(ProjectConfiguration config,
+        List<BuildDiagnostic> diagnostics)
+    {
+        foreach (var scheme in config.Schemes)
+            CheckArea(scheme.Name, "экран", scheme.Properties, scheme.Elements, diagnostics);
+        foreach (var template in config.Templates)
+            CheckArea(template.Name, "шаблон", template.Properties, template.Elements, diagnostics);
+    }
+
+    private static void CheckArea(string name, string what,
+        IReadOnlyList<ElementProperty> properties, IReadOnlyList<SchemeElement> elements,
+        List<BuildDiagnostic> diagnostics)
+    {
+        double width = SchemeNumber(properties, DesignWidthId);
+        double height = SchemeNumber(properties, DesignHeightId);
+        string source = $"scheme:{name}";
+
+        if (width <= 0 || height <= 0)
+        {
+            diagnostics.Add(new BuildDiagnostic(BuildSeverity.Error, source,
+                $"{what} '{name}': проектная область {width}x{height} — размеры должны быть " +
+                "положительными, по ним считается масштаб вписывания в окно"));
+            return;
+        }
+
+        foreach (var element in elements)
+        {
+            bool outside = element.X >= width || element.Y >= height
+                || element.X + element.Width <= 0 || element.Y + element.Height <= 0;
+            if (!outside)
+                continue;
+
+            string label = string.IsNullOrEmpty(element.Name)
+                ? element.Kind.ToString()
+                : $"'{element.Name}'";
+            diagnostics.Add(new BuildDiagnostic(BuildSeverity.Warning, source,
+                $"{what} '{name}': элемент {label} целиком за проектной областью " +
+                $"({width}x{height}) — на экране он не появится"));
+        }
+
+        CheckViewport(name, what, properties, source, diagnostics);
+    }
+
+    /// <summary>
+    /// Пан, зум и начальное приближение. Экран вписывается в окно целиком,
+    /// поэтому масштаб меньше вписанного лишён смысла — схема уплыла бы
+    /// в угол окна. А начальное приближение при запрещённом пане оставило бы
+    /// оператора с обрезанным экраном без возможности его подвинуть.
+    /// </summary>
+    private static void CheckViewport(string name, string what,
+        IReadOnlyList<ElementProperty> properties, string source,
+        List<BuildDiagnostic> diagnostics)
+    {
+        double startZoom = SchemeNumber(properties, StartZoomId);
+        double maxZoom = SchemeNumber(properties, MaxZoomId);
+        bool allowPanZoom = SchemeFlag(properties, AllowPanZoomId);
+
+        if (maxZoom < 1)
+            diagnostics.Add(new BuildDiagnostic(BuildSeverity.Error, source,
+                $"{what} '{name}': предел приближения {maxZoom} меньше единицы — " +
+                "отдалить экран меньше вписанного нельзя"));
+
+        if (startZoom < 1)
+            diagnostics.Add(new BuildDiagnostic(BuildSeverity.Warning, source,
+                $"{what} '{name}': начальное приближение {startZoom} меньше единицы — " +
+                "экран и так вписан целиком, значение будет поднято до 1"));
+        else if (startZoom > maxZoom && maxZoom >= 1)
+            diagnostics.Add(new BuildDiagnostic(BuildSeverity.Warning, source,
+                $"{what} '{name}': начальное приближение {startZoom} больше предела " +
+                $"{maxZoom} — будет ограничено пределом"));
+
+        if (!allowPanZoom && startZoom != 1)
+            diagnostics.Add(new BuildDiagnostic(BuildSeverity.Warning, source,
+                $"{what} '{name}': начальное приближение задано, но пан и зум запрещены — " +
+                "оператор увидел бы обрезанный экран без возможности подвинуть его, " +
+                "значение игнорируется"));
+    }
+
+    /// <summary>Логическое свойство уровня схемы: заданное или умолчание.</summary>
+    private static bool SchemeFlag(IReadOnlyList<ElementProperty> properties, int propertyId)
+    {
+        foreach (var property in properties)
+            if (property.PropertyId == propertyId)
+                return property.Value.Number != 0;
+        return (ElementSchemas.FindSchemeProperty(propertyId)?.Default.Number ?? 0) != 0;
+    }
+
+    /// <summary>Числовое свойство уровня схемы: заданное или умолчание
+    /// дескриптора (свойства хранятся разреженно).</summary>
+    private static double SchemeNumber(IReadOnlyList<ElementProperty> properties, int propertyId)
+    {
+        foreach (var property in properties)
+            if (property.PropertyId == propertyId)
+                return property.Value.Number;
+        return ElementSchemas.FindSchemeProperty(propertyId)?.Default.Number ?? 0;
+    }
+
+    private const int DesignWidthId = 101;
+    private const int DesignHeightId = 102;
+    private const int StartZoomId = 103;
+    private const int AllowPanZoomId = 104;
+    private const int MaxZoomId = 105;
+
     /// <summary>
     /// Сессионный тег в условии правила сигнализации — ошибка сборки
     /// (docs/session-tags-concept.md §2.3). Правила считаются на сервере,
@@ -379,6 +496,7 @@ public static class ProjectBuildService
 
         ValidateTemplateCycles(templatesByName, diagnostics);
         ValidateSchemeRights(config, diagnostics);
+        ValidateDesignArea(config, diagnostics);
     }
 
     /// <summary>

@@ -62,10 +62,12 @@ public class PackageBuilderTests : IDisposable
         Assert.Equal("BoilerRoom", config.Name);
         Assert.Equal("3.1", config.Version);
 
-        // пакет несёт сгенерированную диагностику канала (7 тегов), архива (§7.5)
-        // и корневые системные теги аварий (A5)
+        // пакет несёт сгенерированную диагностику канала (7 тегов), архива (§7.5),
+        // корневые системные теги аварий (A5) и системные сессионные теги:
+        // @User.* (3), @Right.* по системным правам, @Station.* (2)
         Assert.Equal(2 + 7 + SCADA.Runtime.Historian.ArchiveDiagnostics.MetricDefinitions.Count
-            + SCADA.Core.Alarms.AlarmTags.SystemMetrics.Length, config.Tags.Count);
+            + SCADA.Core.Alarms.AlarmTags.SystemMetrics.Length
+            + 3 + SCADA.Core.Users.SystemPermissions.All.Count + 2, config.Tags.Count);
         var temp = config.Tags[0];
         Assert.Equal("Boiler1.Temp", temp.Name);
         Assert.Equal(TagDataType.Analog, temp.DataType);
@@ -81,7 +83,7 @@ public class PackageBuilderTests : IDisposable
 
         var channel = Assert.Single(config.Channels);
         Assert.Equal("192.168.0.10:502", channel.Configuration);
-        Assert.Equal(4, config.Devices.Count); // PLC1 + "@Line1" + "@Archive" + "@Alarms"
+        Assert.Equal(5, config.Devices.Count); // PLC1 + "@Line1" + "@Archive" + "@Alarms" + "@Session"
         Assert.Equal("simulator", config.Devices[0].DriverName);
     }
 

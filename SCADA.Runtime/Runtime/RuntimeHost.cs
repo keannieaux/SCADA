@@ -157,7 +157,11 @@ public sealed class RuntimeHost : IAsyncDisposable
         // это каталог, в котором он лежит: сам .scadapkg неизменяем.
         string projectDirectory = Path.GetDirectoryName(Path.GetFullPath(packagePath))!;
 
-        var tagTable = new global::SCADA.Runtime.TagTable.TagTable(config.Tags.Count);
+        // одна шкала времени на зрителя: общая и сессионная таблицы делят
+        // счётчик эпох, поэтому «изменилось после N» сопоставимо между ними
+        // (docs/session-tags-concept.md §4)
+        var epochs = new EpochCounter();
+        var tagTable = new global::SCADA.Runtime.TagTable.TagTable(config.Tags.Count, epochs);
 
         // M7: запись в устройства — аудит (та же events.db, таблица Audit, ТЗ §13)
         // и персистентность internal-тегов (файл в папке проекта, §14.6)
@@ -177,6 +181,12 @@ public sealed class RuntimeHost : IAsyncDisposable
         builder.Services.AddSingleton(engine);
         builder.Services.AddHostedService<RuntimeHostService>();
 
+        // имя → TagId: нужно и системным тегам аварий (концепт §10, движок
+        // публикует состояние в TagTable), и сессионным, и каталогу схем
+        var tagsByName = new Dictionary<string, TagId>(config.Tags.Count);
+        foreach (var tag in config.Tags)
+            tagsByName[tag.Name] = tag.Id;
+
         // --- пользователи и сессии (docs/users-plan.md §6) ---
 
         // users.json — данные эксплуатации, лежат рядом с журналом и архивом,
@@ -188,10 +198,29 @@ public sealed class RuntimeHost : IAsyncDisposable
                 $"{SystemPermissions.ManageUsers}: создана учётка восстановления " +
                 $"'{UserStore.DefaultAdminLogin}' с паролем по умолчанию — смените его");
 
+        // сессионные теги (docs/session-tags-concept.md): их значения живут
+        // в локальной таблице клиента. Движок опроса, сигнализация и архив
+        // продолжают работать с общей таблицей — они про объект, а не про АРМ
+        var clientTagTable = SessionTagRouter.Wrap(tagTable, config.Tags, epochs);
+        var sessionTagRouter = clientTagTable as SessionTagRouter;
+
         var sessions = new SessionService(userStore, config.Users, options.AuthMode);
         // проверки прав в ядре (§5): в режиме Local встроенный администратор
         // разрешает всё — поведение существующих запусков не меняется
         var accessControl = new SessionAccessControl(sessions);
+
+        // системные сессионные теги: заполняются по событиям сессии.
+        // Права берутся из конфигурации — теги под них завёл генератор,
+        // и гасить снятые права надо по полному набору, а не по выданным
+        var rightPermissions = config.Tags
+            .Where(t => t.Name.StartsWith(SessionSystemTags.RightPrefix, StringComparison.Ordinal))
+            .Select(t => t.Name[SessionSystemTags.RightPrefix.Length..])
+            .ToArray();
+        var sessionTagPublisher = new SessionTagPublisher(clientTagTable, sessions,
+            name => tagsByName.TryGetValue(name, out var id) ? id : null,
+            Environment.MachineName, rightPermissions);
+        owned.Add(sessionTagPublisher);
+
         builder.Services.AddSingleton<IUserStore>(userStore);
         builder.Services.AddSingleton<ISessionService>(sessions);
         builder.Services.AddSingleton<IAccessControl>(accessControl);
@@ -223,12 +252,6 @@ public sealed class RuntimeHost : IAsyncDisposable
         var preparedRules = AlarmRulePreparer.Prepare(
             config.Alarms, config.Tags, PrepareFromPool,
             warning => Console.WriteLine(warning));
-
-        // системные теги аварий (концепт §10): движок публикует состояние
-        // в TagTable на переходах — схемы вяжутся на них обычными привязками
-        var tagsByName = new Dictionary<string, TagId>(config.Tags.Count);
-        foreach (var tag in config.Tags)
-            tagsByName[tag.Name] = tag.Id;
 
         // каталог статических данных проекта (M6): схемы, шаблоны, пул
         // выражений, имена тегов, ассеты — неизменен в течение сессии
@@ -344,9 +367,9 @@ public sealed class RuntimeHost : IAsyncDisposable
             builder.Services.AddHostedService<ArchiveHostService>();
 
             builder.Services.AddSingleton<IRuntimeClient>(sp =>
-                new LocalRuntimeClient(tagTable, sp.GetRequiredService<IHistorian>(), queryLimits,
-                    alarmEngine, eventJournal, alarmBroadcaster, engine, schemeCatalog,
-                    accessControl, auditJournal));
+                new LocalRuntimeClient(clientTagTable, sp.GetRequiredService<IHistorian>(),
+                    queryLimits, alarmEngine, eventJournal, alarmBroadcaster, engine,
+                    schemeCatalog, accessControl, auditJournal, sessionTagRouter));
 
             Console.WriteLine($"[архив] каталог: {archiveRoot}");
         }
@@ -355,8 +378,8 @@ public sealed class RuntimeHost : IAsyncDisposable
             // Без архива клиент отдаёт текущие значения и пустую историю: схемы и
             // диагностика работают, тренды показывают пустоту вместо падения.
             builder.Services.AddSingleton<IRuntimeClient>(new LocalRuntimeClient(
-                tagTable, null, queryLimits, alarmEngine, eventJournal, alarmBroadcaster,
-                engine, schemeCatalog, accessControl, auditJournal));
+                clientTagTable, null, queryLimits, alarmEngine, eventJournal, alarmBroadcaster,
+                engine, schemeCatalog, accessControl, auditJournal, sessionTagRouter));
             Console.WriteLine("[архив] выключен настройкой Runtime:Archive:Enabled");
         }
 

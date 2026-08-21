@@ -88,6 +88,10 @@ public static class ProjectLoader
         // уже содержащего @Alarm.*/@AlarmGroup.*/@AlarmSystem.*
         AlarmTagGenerator.AppendAlarmTags(config);
 
+        // системные сессионные теги (docs/session-tags-concept.md §3) — после
+        // аварийных по той же причине: порядок генерации определяет TagId
+        SessionTagGenerator.AppendSessionTags(config);
+
         return config;
     }
 

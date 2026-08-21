@@ -5,13 +5,22 @@ namespace SCADA.Runtime.TagTable;
 public sealed class TagTable : ITagTable
 {
     private readonly TagSlot[] _slots;
-    private long _epoch;
+    private readonly EpochCounter _epochs;
 
-    public long CurrentEpoch => Interlocked.Read(ref _epoch);
-    public TagTable(int capacity)
+    public long CurrentEpoch => _epochs.Current;
+
+    /// <param name="epochs">
+    /// Общая шкала времени зрителя (docs/session-tags-concept.md §4). Таблицы,
+    /// которые читает один и тот же клиент, обязаны получить один экземпляр —
+    /// иначе «что изменилось после N» перестаёт быть сопоставимым между ними.
+    /// null — таблица заводит собственную шкалу (одиночное использование,
+    /// тесты).
+    /// </param>
+    public TagTable(int capacity, EpochCounter? epochs = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(capacity);
         _slots = new TagSlot[capacity];
+        _epochs = epochs ?? new EpochCounter();
     }
 
 
@@ -39,7 +48,7 @@ public sealed class TagTable : ITagTable
 
         Interlocked.Increment(ref slot.Version);
         slot.Value = value;
-        slot.LastChangedEpoch = Interlocked.Increment(ref _epoch);
+        slot.LastChangedEpoch = _epochs.Next();
         Interlocked.Increment(ref slot.Version);
     }
 
@@ -52,7 +61,7 @@ public sealed class TagTable : ITagTable
         Interlocked.Increment(ref slot.Version);
         slot.Text = value.Text;
         slot.Value = new TagValue(slot.Value.Value, value.TimeStampUtc, value.Quality);
-        slot.LastChangedEpoch = Interlocked.Increment(ref _epoch);
+        slot.LastChangedEpoch = _epochs.Next();
         Interlocked.Increment(ref slot.Version);
     }
 

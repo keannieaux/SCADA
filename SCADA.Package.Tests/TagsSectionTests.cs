@@ -89,6 +89,8 @@ public class TagsSectionTests
         Assert.Equal(15, logging.Schedule[1].DayOfMonth);
         Assert.Equal(6, logging.Schedule[1].Month);
 
+        Assert.Equal(TagScope.Shared, full.Scope); // умолчание
+
         var minimal = restored[1];
         Assert.Equal("Pump1.Running", minimal.Name);
         Assert.Equal("", minimal.Description);
@@ -97,5 +99,26 @@ public class TagsSectionTests
         Assert.Null(minimal.Logging);
         Assert.False(minimal.IsWritable);
         Assert.False(minimal.RequiresWriteConfirmation);
+    }
+
+    [Fact]
+    public void SessionScope_SurvivesRoundTrip()
+    {
+        // область значения едет в пакет: клиент по ней решает, какие теги
+        // обслуживать локально (docs/session-tags-concept.md §2)
+        List<TagDefinition> tags =
+        [
+            new TagDefinition
+            {
+                Id = new TagId(0), Name = "Экран.Режим", DataType = TagDataType.Analog,
+                DeviceId = new DeviceId(1), IsWritable = true,
+                Scope = TagScope.Session, InitValue = 1
+            }
+        ];
+
+        var restored = TagsSectionReader.Read(TagsSectionWriter.Write(tags)).Single();
+
+        Assert.Equal(TagScope.Session, restored.Scope);
+        Assert.Equal(1, restored.InitValue);
     }
 }

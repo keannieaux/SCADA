@@ -6,6 +6,13 @@ public static class ExpressionVM
     private const int MaxStackDepth = 32;
     public static double Evaluate(Expression expression, EvaluationContext context)
     {
+        // default(Expression) обходит required (Expression.cs): без явной
+        // проверки вместо внятной ошибки был бы NullReferenceException
+        // из середины цикла ВМ
+        if (expression.Code is null)
+            throw new InvalidOperationException(
+                "Выражение не инициализировано: пустой байткод (default(Expression))");
+
         Span<double> stack = stackalloc double[MaxStackDepth];
         int sp = 0;
 

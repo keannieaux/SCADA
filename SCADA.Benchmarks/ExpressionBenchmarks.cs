@@ -10,7 +10,7 @@ namespace SCADA.Benchmarks;
 [MemoryDiagnoser]
 public class ExpressionBenchmarks
 {
-    private Expression _expr = null!;
+    private Expression _expr;
     private EvaluationContext _context = null!;
 
     [GlobalSetup]

@@ -261,4 +261,133 @@ public class SchemeRightsTests : IDisposable
         Assert.Contains(result.Diagnostics,
             d => d.Severity == BuildSeverity.Error && d.Message.Contains("requiredRight"));
     }
+
+    // --- проектная область (концепт §6.1) ---
+
+    [Fact]
+    public void Build_NonPositiveDesignArea_Fails()
+    {
+        // по DesignWidth считается масштаб вписывания: ноль дал бы
+        // в рантайме Infinity вместо масштаба
+        WriteScheme("broken.scheme", """
+            {
+              "properties": [{"id": 101, "value": "0"}],
+              "elements": []
+            }
+            """);
+
+        var result = ProjectBuildService.Build(ProjectDir, PackagePath);
+
+        Assert.False(result.Success);
+        Assert.Contains(result.Diagnostics, d => d.Severity == BuildSeverity.Error
+            && d.Message.Contains("проектная область"));
+    }
+
+    [Fact]
+    public void Build_ElementOutsideDesignArea_Warns()
+    {
+        // схема вписывается в окно и обрезается по проектной области —
+        // элемент за её пределами на экране не появится
+        WriteScheme("overview.scheme", """
+            {
+              "properties": [{"id": 101, "value": "800"}, {"id": 102, "value": "600"}],
+              "elements": [
+                {"kind": "Rectangle", "name": "Уехал", "x": 900, "y": 10, "width": 50, "height": 50},
+                {"kind": "Rectangle", "name": "НаМесте", "x": 10, "y": 10, "width": 50, "height": 50}
+              ]
+            }
+            """);
+
+        var result = ProjectBuildService.Build(ProjectDir, PackagePath);
+
+        Assert.True(result.Success); // предупреждение, а не ошибка
+        var warning = Assert.Single(result.Diagnostics,
+            d => d.Severity == BuildSeverity.Warning && d.Message.Contains("за проектной областью"));
+        Assert.Contains("Уехал", warning.Message);
+    }
+
+    [Fact]
+    public void Build_ElementPartiallyOutside_NotReported()
+    {
+        // частично выходящий — норма: элемент может выезжать из-за края анимацией
+        WriteScheme("overview.scheme", """
+            {
+              "properties": [{"id": 101, "value": "800"}, {"id": 102, "value": "600"}],
+              "elements": [
+                {"kind": "Rectangle", "name": "Край", "x": -20, "y": 10, "width": 50, "height": 50}
+              ]
+            }
+            """);
+
+        var result = ProjectBuildService.Build(ProjectDir, PackagePath);
+
+        Assert.DoesNotContain(result.Diagnostics, d => d.Message.Contains("за проектной областью"));
+    }
+
+    // --- пан, зум, начальное приближение ---
+
+    [Fact]
+    public void Build_MaxZoomBelowOne_Fails()
+    {
+        // минимальный масштаб — вписанный; отдалить сильнее нечего
+        WriteScheme("overview.scheme", """
+            {"properties": [{"id": 105, "value": "0.5"}], "elements": []}
+            """);
+
+        var result = ProjectBuildService.Build(ProjectDir, PackagePath);
+
+        Assert.False(result.Success);
+        Assert.Contains(result.Diagnostics, d => d.Severity == BuildSeverity.Error
+            && d.Message.Contains("предел приближения"));
+    }
+
+    [Fact]
+    public void Build_StartZoomWithoutPanZoom_Warns()
+    {
+        // приближение при запрещённом пане = обрезанный экран без возможности
+        // его подвинуть
+        WriteScheme("overview.scheme", """
+            {"properties": [{"id": 103, "value": "2"}], "elements": []}
+            """);
+
+        var result = ProjectBuildService.Build(ProjectDir, PackagePath);
+
+        Assert.True(result.Success);
+        Assert.Contains(result.Diagnostics, d => d.Severity == BuildSeverity.Warning
+            && d.Message.Contains("пан и зум запрещены"));
+    }
+
+    [Fact]
+    public void Build_StartZoomAboveMax_Warns()
+    {
+        WriteScheme("overview.scheme", """
+            {
+              "properties": [
+                {"id": 103, "value": "8"}, {"id": 104, "value": "true"}, {"id": 105, "value": "4"}
+              ],
+              "elements": []
+            }
+            """);
+
+        var result = ProjectBuildService.Build(ProjectDir, PackagePath);
+
+        Assert.True(result.Success);
+        Assert.Contains(result.Diagnostics, d => d.Severity == BuildSeverity.Warning
+            && d.Message.Contains("больше предела"));
+    }
+
+    [Fact]
+    public void Build_DefaultViewport_NoDiagnostics()
+    {
+        // умолчания: вписано, пан и зум запрещены — тишина
+        WriteScheme("overview.scheme", """
+            {"elements": [{"kind": "Rectangle", "x": 0, "y": 0, "width": 10, "height": 10}]}
+            """);
+
+        var result = ProjectBuildService.Build(ProjectDir, PackagePath);
+
+        Assert.True(result.Success);
+        Assert.DoesNotContain(result.Diagnostics,
+            d => d.Source.StartsWith("scheme:", StringComparison.Ordinal));
+    }
 }

@@ -44,6 +44,11 @@ public class TagDefinition
     /// <summary>Происхождение тега: из исходного проекта или сгенерирован системой.</summary>
     public TagOrigin Origin { get; set; } = TagOrigin.Process;
 
+    /// <summary>Кому принадлежит значение: объекту (общая таблица) или
+    /// клиенту — сессионный тег, локальная таблица, своя у каждого АРМа
+    /// (docs/session-tags-concept.md).</summary>
+    public TagScope Scope { get; set; } = TagScope.Shared;
+
      public TagLoggingConfiguration? Logging { get; set; }
 
 }

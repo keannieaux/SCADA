@@ -28,6 +28,7 @@ public static class ProjectValidator
         ValidateRoles(config, errors);
         ValidateStartScheme(config, errors);
         ValidateStringTags(config, errors);
+        ValidateSessionTags(config, errors);
         return errors;
     }
 
@@ -82,6 +83,45 @@ public static class ProjectValidator
                 errors.Add($"Тег '{tag.Name}' (id={tag.Id.Value}): строковые теги поддерживаются " +
                            "только на внутренних устройствах (internal), строковых драйверов пока нет");
         }
+    }
+
+    // сессионные теги (docs/session-tags-concept.md §2.3). Значение
+    // принадлежит АРМу, а не объекту: на сервере слота нет вовсе. Отсюда
+    // запреты — жёсткие, а не предупреждения: «архив с логином оператора» или
+    // «правило аварии, зависящее от того, кто за пультом» должны ломаться
+    // на столе у инженера, а не выясняться на объекте
+    private static void ValidateSessionTags(ProjectConfiguration config, List<string> errors)
+    {
+        var sessionTags = config.Tags.Where(t => t.Scope == TagScope.Session).ToArray();
+        if (sessionTags.Length == 0)
+            return;
+
+        var driverByDevice = config.Devices.ToDictionary(d => d.Id, d => d.DriverName);
+
+        foreach (var tag in sessionTags)
+        {
+            string where = $"Сессионный тег '{tag.Name}' (id={tag.Id.Value})";
+
+            if (tag.IsArchived)
+                errors.Add($"{where}: не архивируется — значение принадлежит АРМу, а не объекту");
+            if (tag.Logging is not null)
+                errors.Add($"{where}: не логируется — значение принадлежит АРМу, а не объекту");
+            if (tag.IsPersistent)
+                errors.Add($"{where}: сохранение между запусками ещё не поддерживается " +
+                           "(session-tags-concept.md §5); задайте начальное значение InitValue");
+            if (driverByDevice.TryGetValue(tag.DeviceId, out string? driver) && driver != "internal")
+                errors.Add($"{where}: допустим только на внутреннем устройстве (internal) — " +
+                           "источника опроса у такого тега нет");
+        }
+
+        // прямая ссылка из правила сигнализации. Ссылку внутри условия-выражения
+        // ловит сборщик: какие теги участвуют в выражении, знает только компилятор
+        var sessionNames = sessionTags.Select(t => t.Name).ToHashSet(StringComparer.Ordinal);
+        foreach (var rule in config.Alarms.Rules)
+            if (rule.TagName is { Length: > 0 } tagName && sessionNames.Contains(tagName))
+                errors.Add($"Правило сигнализации '{rule.Name}' ссылается на сессионный тег " +
+                           $"'{tagName}': правила считаются на сервере, где сессионных " +
+                           "значений нет");
     }
 
     private static void ValidateStartScheme(ProjectConfiguration config, List<string> errors)

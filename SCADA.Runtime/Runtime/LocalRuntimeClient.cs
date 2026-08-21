@@ -30,6 +30,7 @@ public sealed class LocalRuntimeClient : IRuntimeClient
     private readonly SchemeCatalog? _schemeCatalog;
     private readonly IAccessControl? _access;
     private readonly IAuditJournal? _audit;
+    private readonly SessionTagRouter? _sessionTags;
 
     /// <param name="historian">
     /// null, если архив выключен: тогда запросы истории отдают пустые ряды,
@@ -56,6 +57,12 @@ public sealed class LocalRuntimeClient : IRuntimeClient
     /// журнал для отказов: попытка без права — тоже событие (§7). Успешные
     /// записи аудирует движок опроса, он же знает старые значения.
     /// </param>
+    /// <param name="sessionTags">
+    /// маршрутизатор сессионных тегов, если они есть в проекте: их запись
+    /// исполняется локально, минуя движок опроса и аудит
+    /// (docs/session-tags-concept.md §2.2). Обычно это тот же объект, что
+    /// передан в <paramref name="tagTable"/>.
+    /// </param>
     public LocalRuntimeClient(
         ITagTable tagTable,
         IHistorian? historian = null,
@@ -66,7 +73,8 @@ public sealed class LocalRuntimeClient : IRuntimeClient
         PollingEngine? pollingEngine = null,
         SchemeCatalog? schemeCatalog = null,
         IAccessControl? access = null,
-        IAuditJournal? audit = null)
+        IAuditJournal? audit = null,
+        SessionTagRouter? sessionTags = null)
     {
         _tagTable = tagTable;
         _historian = historian;
@@ -78,6 +86,7 @@ public sealed class LocalRuntimeClient : IRuntimeClient
         _schemeCatalog = schemeCatalog;
         _access = access;
         _audit = audit;
+        _sessionTags = sessionTags;
     }
 
     public TagValue Read(TagId id) => _tagTable.Read(id);
@@ -111,6 +120,13 @@ public sealed class LocalRuntimeClient : IRuntimeClient
     public async ValueTask<IReadOnlyList<TagWriteResult>> WriteTagsAsync(
         IReadOnlyList<TagWriteItem> items, string requestedBy, CancellationToken ct = default)
     {
+        // сессионные теги пишутся локально: без сети, без права Operate
+        // и без аудита — это состояние интерфейса, а не команда объекту
+        // (docs/session-tags-concept.md §2.2). Смешанный пакет делится:
+        // сессионная часть исполняется здесь, остальная — обычным путём
+        if (_sessionTags is not null && items.Any(i => _sessionTags.IsSessionTag(i.TagId)))
+            return await WriteMixedAsync(items, requestedBy, ct);
+
         if (_access is not null)
         {
             if (!_access.HasPermission(SystemPermissions.Operate))
@@ -134,6 +150,40 @@ public sealed class LocalRuntimeClient : IRuntimeClient
             return items.Select(_ => new TagWriteResult(
                 TagWriteStatus.Failed, "движок опроса не подключён")).ToArray();
         return await _pollingEngine.WriteTagsAsync(items, requestedBy, ct);
+    }
+
+    /// <summary>
+    /// Пакет с сессионными тегами: сессионные исполняются локально, остальные
+    /// уходят прежним путём (право `Operate`, движок опроса, аудит). Порядок
+    /// результатов соответствует входному списку — контракт batch-native
+    /// не меняется.
+    /// </summary>
+    private async ValueTask<IReadOnlyList<TagWriteResult>> WriteMixedAsync(
+        IReadOnlyList<TagWriteItem> items, string requestedBy, CancellationToken ct)
+    {
+        var results = new TagWriteResult[items.Count];
+        var forEngine = new List<TagWriteItem>();
+        var engineIndices = new List<int>();
+
+        for (int i = 0; i < items.Count; i++)
+        {
+            if (_sessionTags!.IsSessionTag(items[i].TagId))
+            {
+                results[i] = _sessionTags.WriteFromOperator(items[i].TagId, items[i].Value);
+                continue;
+            }
+            forEngine.Add(items[i]);
+            engineIndices.Add(i);
+        }
+
+        if (forEngine.Count > 0)
+        {
+            var engineResults = await WriteTagsAsync(forEngine, requestedBy, ct);
+            for (int i = 0; i < engineIndices.Count; i++)
+                results[engineIndices[i]] = engineResults[i];
+        }
+
+        return results;
     }
 
     public async ValueTask<TagWriteResult> WriteTagAsync(

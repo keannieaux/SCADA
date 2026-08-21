@@ -163,6 +163,28 @@
       ]
     },
     {
+      "name": "Уставка +5",
+      "kind": "Rectangle",
+      "x": 440, "y": 260, "width": 160, "height": 44,
+      "zOrder": 84,
+      "properties": [
+        { "id": 10, "value": "#FF2B2F33" },
+        { "id": 8, "value": "F0" },
+        { "id": 9, "value": "°C" }
+      ],
+      "bindings": [
+        { "property": 7, "expression": "SetpointCmd" }
+      ],
+      "events": [
+        {
+          "kind": "Click",
+          "actions": [
+            { "type": "WriteTag", "tag": "SetpointCmd", "valueExpression": "SetpointCmd + 5" }
+          ]
+        }
+      ]
+    },
+    {
       "name": "Труба",
       "kind": "Rectangle",
       "x": 900, "y": 20, "width": 30, "height": 250,

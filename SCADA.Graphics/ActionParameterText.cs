@@ -43,7 +43,7 @@ public static class ActionParameterText
         for (int i = 0; i < placeholders.Count; i++)
         {
             builder.Append(literals[i]);
-            double value = ExpressionVM.Evaluate(placeholders[i].ToExpression(), context);
+            double value = ExpressionVM.Evaluate(placeholders[i], context);
             builder.Append(value.ToString(CultureInfo.InvariantCulture));
         }
         builder.Append(literals[^1]);

@@ -1,0 +1,181 @@
+{
+  "name": "main",
+  "properties": [
+    { "id": 100, "value": "#FF222528" },
+    { "id": 103, "value": "1" }
+  ],
+  "elements": [
+    {
+      "name": "Панель приборов",
+      "kind": "Rectangle",
+      "x": 10, "y": 10, "width": 420, "height": 320,
+      "zOrder": 0,
+      "properties": [
+        { "id": 10, "value": "#FF2B2F33" }
+      ]
+    },
+    {
+      "name": "Температура",
+      "kind": "Rectangle",
+      "x": 20, "y": 20, "width": 200, "height": 120,
+      "zOrder": 10,
+      "properties": [
+        { "id": 8, "value": "F1" },
+        { "id": 9, "value": "°C" }
+      ],
+      "bindings": [
+        {
+          "property": 10,
+          "expression": "Temperature",
+          "mapping": "Discrete",
+          "stops": [
+            { "input": 0, "output": "#FF33383D" },
+            { "input": 60, "output": "#FFE8A33D" },
+            { "input": 85, "output": "#FFE5484D" }
+          ]
+        },
+        { "property": 7, "expression": "Temperature" }
+      ]
+    },
+    {
+      "name": "Давление",
+      "kind": "Ellipse",
+      "x": 260, "y": 20, "width": 150, "height": 150,
+      "zOrder": 20,
+      "bindings": [
+        {
+          "property": 10,
+          "expression": "Pressure",
+          "mapping": "Discrete",
+          "stops": [
+            { "input": 0, "output": "#FF33383D" },
+            { "input": 6, "output": "#FFE8A33D" },
+            { "input": 8.5, "output": "#FFE5484D" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Аварийная лампа",
+      "kind": "Ellipse",
+      "x": 440, "y": 70, "width": 30, "height": 30,
+      "zOrder": 30,
+      "bindings": [
+        { "property": 5, "expression": "Temperature > 90" },
+        { "property": 6, "expression": "Temperature > 90" }
+      ]
+    },
+    {
+      "name": "Вращение от времени",
+      "kind": "Rectangle",
+      "x": 520, "y": 20, "width": 80, "height": 20,
+      "zOrder": 40,
+      "bindings": [
+        { "property": 2, "expression": "now() * 90 % 360", "volatile": true }
+      ],
+      "events": [
+        {
+          "kind": "Click",
+          "actions": [
+            { "type": "ShowDialog", "message": "Клик по повернутому элементу!" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Бак",
+      "kind": "Rectangle",
+      "x": 20, "y": 170, "width": 100, "height": 150,
+      "zOrder": 50,
+      "bindings": [
+        { "property": 14, "expression": "Pressure / 10" },
+        {
+          "property": 10,
+          "expression": "Pressure",
+          "mapping": "Discrete",
+          "stops": [
+            { "input": 0, "output": "#FF33383D" },
+            { "input": 6, "output": "#FFE8A33D" },
+            { "input": 8.5, "output": "#FFE5484D" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Сдвиг по X",
+      "kind": "Rectangle",
+      "x": 20, "y": 340, "width": 20, "height": 20,
+      "zOrder": 60,
+      "bindings": [
+        { "property": 3, "expression": "Pressure*20" }
+      ]
+    },
+    {
+      "name": "Насос",
+      "kind": "Symbol",
+      "x": 620, "y": 170, "width": 80, "height": 80,
+      "zOrder": 70,
+      "properties": [
+        { "id": 30, "value": "pump.svg" }
+      ],
+      "bindings": [
+        { "property": 2, "expression": "Pressure*36" },
+        {
+          "property": 13,
+          "expression": "PumpCmd",
+          "mapping": "Discrete",
+          "stops": [
+            { "input": 0, "output": "#FF9BA1A5" },
+            { "input": 0.5, "output": "#FF3DD68C" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Команда насосу",
+      "kind": "Rectangle",
+      "x": 740, "y": 170, "width": 140, "height": 60,
+      "zOrder": 80,
+      "properties": [
+        { "id": 8, "value": "F0" }
+      ],
+      "bindings": [
+        {
+          "property": 10,
+          "expression": "PumpCmd",
+          "mapping": "Discrete",
+          "stops": [
+            { "input": 0, "output": "#FF33383D" },
+            { "input": 0.5, "output": "#FFE8A33D" }
+          ]
+        },
+        { "property": 7, "expression": "PumpCmd" }
+      ],
+      "events": [
+        {
+          "kind": "Click",
+          "actions": [
+            { "type": "ToggleTag", "tag": "PumpCmd", "confirm": "Переключить насос?" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Труба",
+      "kind": "Rectangle",
+      "x": 900, "y": 20, "width": 30, "height": 250,
+      "zOrder": 90,
+      "bindings": [
+        {
+          "property": 10,
+          "expression": "Temperature",
+          "mapping": "Interpolated",
+          "stops": [
+            { "input": 0, "output": "#FF3D7FE8" },
+            { "input": 100, "output": "#FFE5484D" }
+          ]
+        }
+      ]
+    }
+  ]
+}

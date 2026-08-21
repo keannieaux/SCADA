@@ -159,7 +159,7 @@ public class ActionParameterTextTests
 
         Assert.NotNull(action.ValueExpression);
         double value = ExpressionVM.Evaluate(
-            action.ValueExpression.ToExpression(), Context((1, 41)));
+            action.ValueExpression.Value, Context((1, 41)));
         Assert.Equal(42, value);
     }
 

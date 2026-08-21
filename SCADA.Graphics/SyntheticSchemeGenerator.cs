@@ -43,7 +43,7 @@ public static class SyntheticSchemeGenerator
             if (volatileEvery > 0 && i % volatileEvery == 0)
                 bindings.Add(new ElementBinding
                 {
-                    PropertyId = SchemeProperty.Rotation,
+                    PropertyId = SchemeProperty.RotationDegrees,
                     Expression = "now() * 90 % 360",
                     Volatile = true
                 });

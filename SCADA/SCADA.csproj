@@ -15,7 +15,6 @@
         <ProjectReference Include="..\SCADA.Package\SCADA.Package.csproj" />
 
         <None Include="TestProject\**" CopyToOutputDirectory="PreserveNewest" />
-        <None Include="Symbols\**" CopyToOutputDirectory="PreserveNewest" />
 
     </ItemGroup>
 

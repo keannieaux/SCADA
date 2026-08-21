@@ -1,6 +1,6 @@
 using SCADA.Core.Schemes;
 using SCADA.Core.Tags;
-using SCADA.Expressions.Compiler;
+using SCADA.Expressions;
 
 namespace SCADA.Graphics;
 
@@ -25,5 +25,5 @@ public sealed record ResolvedActionParameter(string Name, ActionParamValueKind K
     /// == Placeholders.Count + 1. Плейсхолдеры — скомпилированные числовые
     /// выражения в порядке появления в шаблоне ("Pump{N}").</summary>
     public IReadOnlyList<string>? Literals { get; init; }
-    public IReadOnlyList<CompiledExpression>? Placeholders { get; init; }
+    public IReadOnlyList<Expression>? Placeholders { get; init; }
 }
